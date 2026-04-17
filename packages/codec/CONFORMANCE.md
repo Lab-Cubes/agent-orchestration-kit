@@ -81,9 +81,11 @@ NPS-1 §6 defines 14 `NCP-*` error codes. This codec surfaces a subset matching 
 | `NCP-ENC-NOT-NEGOTIATED` | ➖ N/A | E2E-encryption layer |
 | `NCP-ENC-AUTH-FAILED` | ➖ N/A | E2E-encryption layer |
 
-Codec-only additions (not in spec, used for local diagnostic precision):
-- `NCP-FRAME-TRUNCATED` — input buffer ended before the declared payload length
-- `NCP-PAYLOAD-NOT-JSON` — payload bytes failed UTF-8 decode or JSON parse
+Codec-only additions (not in spec, used for local diagnostic precision). These
+use the `CODEC-*` prefix to keep the `NCP-*` namespace clean of non-spec codes:
+
+- `CODEC-FRAME-TRUNCATED` — input buffer ended before the declared payload length
+- `CODEC-PAYLOAD-NOT-JSON` — payload bytes failed UTF-8 decode, JSON parse, or JSON stringify on the build side
 
 ## §7 Security Considerations
 
@@ -124,7 +126,7 @@ Applicable items and our posture:
 
 - Wire-format correctness for NCP frames 0x01–0x04, 0x06, 0xFE — you can trust the bytes on disk or on the wire to match NPS-1 §3.1.
 - Strict rejection (not silent pass-through) of EXT=1, ENC=1, Tier-2, RSV-non-zero, and out-of-range frame types. A codec that "looks like it works" against Tier-2 traffic is dangerous; this codec fails loudly instead.
-- Error codes aligned with NPS-1 §6 where codec-surfaceable; local diagnostic codes clearly namespaced (`NCP-FRAME-TRUNCATED`, `NCP-PAYLOAD-NOT-JSON`).
+- Error codes aligned with NPS-1 §6 where codec-surfaceable; local diagnostic codes clearly namespaced (`CODEC-FRAME-TRUNCATED`, `CODEC-PAYLOAD-NOT-JSON`).
 - Typed payload interfaces for every built frame, derived directly from §4 field tables.
 
 **What v0.1.0 does NOT guarantee:**

@@ -65,7 +65,7 @@ export function encodeFixedHeader(header: FrameHeader): Uint8Array {
 export function decodeFixedHeader(input: Uint8Array): FrameHeader {
   if (input.length < FIXED_HEADER_BYTES) {
     throw new CodecError(
-      "NCP-FRAME-TRUNCATED",
+      "CODEC-FRAME-TRUNCATED",
       `Header requires ${FIXED_HEADER_BYTES} bytes, got ${input.length}`,
       { available: input.length, required: FIXED_HEADER_BYTES },
     );

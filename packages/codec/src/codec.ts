@@ -24,8 +24,20 @@ export interface ParsedFrame<T = unknown> {
   readonly type: number;
   readonly flags: Flags;
   readonly payload: T;
-  /** Raw payload bytes as transmitted on the wire (pre-JSON-parse). */
+  /**
+   * Raw payload bytes as transmitted on the wire (pre-JSON-parse).
+   *
+   * This is a subarray of the caller's input buffer (not a copy). If the input
+   * buffer is subsequently mutated, `payloadBytes` observes those mutations.
+   * Stream consumers that retain this reference across further writes MUST copy.
+   */
   readonly payloadBytes: Uint8Array;
+  /**
+   * Total bytes consumed from the input buffer by this frame — always
+   * `FIXED_HEADER_BYTES + payloadBytes.length`. Stream consumers advance their
+   * cursor by this value to read the next frame without recomputing it.
+   */
+  readonly frameLength: number;
 }
 
 /**
@@ -85,10 +97,19 @@ export function buildFrame(
     );
   }
 
-  const json = JSON.stringify(payload);
+  let json: string | undefined;
+  try {
+    json = JSON.stringify(payload);
+  } catch (cause) {
+    throw new CodecError(
+      "CODEC-PAYLOAD-NOT-JSON",
+      "Payload is not JSON-serializable",
+      { cause: (cause as Error).message },
+    );
+  }
   if (json === undefined) {
     throw new CodecError(
-      "NCP-PAYLOAD-NOT-JSON",
+      "CODEC-PAYLOAD-NOT-JSON",
       "Payload is not JSON-serializable (undefined / function / symbol at root)",
     );
   }
@@ -137,7 +158,7 @@ export function parseFrame<T = unknown>(input: Uint8Array): ParsedFrame<T> {
   const totalLength = FIXED_HEADER_BYTES + header.payloadLength;
   if (input.length < totalLength) {
     throw new CodecError(
-      "NCP-FRAME-TRUNCATED",
+      "CODEC-FRAME-TRUNCATED",
       `Frame claims ${header.payloadLength} payload bytes, only ${input.length - FIXED_HEADER_BYTES} available`,
       {
         payloadLength: header.payloadLength,
@@ -162,21 +183,29 @@ export function parseFrame<T = unknown>(input: Uint8Array): ParsedFrame<T> {
       { flags: header.flags },
     );
   }
+  if (payloadBytes.length === 0) {
+    // Symmetric with the build-side rejection of an undefined payload — empty
+    // payloads have no JSON shape, so we refuse them rather than yield undefined.
+    throw new CodecError(
+      "CODEC-PAYLOAD-NOT-JSON",
+      "Frame declared zero-length payload; JSON frames require at least one byte",
+    );
+  }
 
   let decodedText: string;
   try {
     decodedText = TEXT_DECODER.decode(payloadBytes);
   } catch (cause) {
-    throw new CodecError("NCP-PAYLOAD-NOT-JSON", "Payload is not valid UTF-8", {
+    throw new CodecError("CODEC-PAYLOAD-NOT-JSON", "Payload is not valid UTF-8", {
       cause: (cause as Error).message,
     });
   }
 
   let payload: unknown;
   try {
-    payload = decodedText === "" ? undefined : JSON.parse(decodedText);
+    payload = JSON.parse(decodedText);
   } catch (cause) {
-    throw new CodecError("NCP-PAYLOAD-NOT-JSON", "Payload is not valid JSON", {
+    throw new CodecError("CODEC-PAYLOAD-NOT-JSON", "Payload is not valid JSON", {
       cause: (cause as Error).message,
     });
   }
@@ -186,6 +215,7 @@ export function parseFrame<T = unknown>(input: Uint8Array): ParsedFrame<T> {
     flags: header.flags,
     payload: payload as T,
     payloadBytes,
+    frameLength: totalLength,
   };
 }
 

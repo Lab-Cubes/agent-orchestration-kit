@@ -24,6 +24,8 @@ function assertRoundTrip<T>(type: number, payload: T): void {
   expect(parsed.flags.encrypted).toBe(false);
   expect(parsed.flags.extended).toBe(false);
   expect(parsed.payload).toEqual(payload);
+  expect(parsed.frameLength).toBe(bytes.length);
+  expect(parsed.payloadBytes.length).toBe(bytes.length - FIXED_HEADER_BYTES);
 }
 
 describe("buildFrame / parseFrame round-trips", () => {
@@ -137,6 +139,28 @@ describe("buildFrame / parseFrame round-trips", () => {
     padded.fill(0xaa, frame.length);
     const parsed = parseFrame(padded);
     expect(parsed.payload).toEqual({ frame: "0xFE", status: "s", error: "e" });
+    expect(parsed.frameLength).toBe(frame.length);
+  });
+
+  it("parses a frame carved as a subarray of a larger buffer", () => {
+    const frame = buildFrame(FrameType.ErrorFrame, {
+      frame: "0xFE",
+      status: "s",
+      error: "e",
+    });
+    const surrounding = new Uint8Array(frame.length + 16);
+    surrounding.set(frame, 8);
+    const parsed = parseFrame(surrounding.subarray(8, 8 + frame.length));
+    expect(parsed.payload).toEqual({ frame: "0xFE", status: "s", error: "e" });
+  });
+
+  it("round-trips root-level JSON primitives (null, number, array, string)", () => {
+    for (const value of [null, 42, 0, -1.5, "hello", [1, 2, 3], []] as const) {
+      const bytes = buildFrame(FrameType.ErrorFrame, value);
+      const parsed = parseFrame(bytes);
+      expect(parsed.payload).toEqual(value);
+      expect(parsed.frameLength).toBe(bytes.length);
+    }
   });
 });
 
@@ -177,7 +201,19 @@ describe("buildFrame — rejects", () => {
 
   it("non-JSON-serializable payloads (root undefined)", () => {
     const err = getError(() => buildFrame(FrameType.CapsFrame, undefined));
-    expect(err.code).toBe("NCP-PAYLOAD-NOT-JSON");
+    expect(err.code).toBe("CODEC-PAYLOAD-NOT-JSON");
+  });
+
+  it("BigInt payloads (JSON.stringify throws TypeError)", () => {
+    const err = getError(() => buildFrame(FrameType.CapsFrame, { n: 1n }));
+    expect(err.code).toBe("CODEC-PAYLOAD-NOT-JSON");
+  });
+
+  it("circular-reference payloads", () => {
+    const obj: { self?: unknown } = {};
+    obj.self = obj;
+    const err = getError(() => buildFrame(FrameType.CapsFrame, obj));
+    expect(err.code).toBe("CODEC-PAYLOAD-NOT-JSON");
   });
 
   it("payloads exceeding the 64 KiB fixed-header max", () => {
@@ -211,7 +247,7 @@ describe("parseFrame — rejects", () => {
     buf[3] = payload.length; // claims more than we actually include
     buf.set(payload.subarray(0, 3), FIXED_HEADER_BYTES);
     const err = getError(() => parseFrame(buf));
-    expect(err.code).toBe("NCP-FRAME-TRUNCATED");
+    expect(err.code).toBe("CODEC-FRAME-TRUNCATED");
   });
 
   it("Tier-2 MsgPack frames", () => {
@@ -220,6 +256,16 @@ describe("parseFrame — rejects", () => {
     buf[1] = 0b0000_0101; // tier-2 msgpack
     const err = getError(() => parseFrame(buf));
     expect(err.code).toBe("NCP-ENCODING-UNSUPPORTED");
+  });
+
+  it("zero-length payload frames (symmetric with build-side reject of undefined)", () => {
+    const buf = new Uint8Array(FIXED_HEADER_BYTES);
+    buf[0] = FrameType.ErrorFrame;
+    buf[1] = 0b0000_0100;
+    buf[2] = 0x00;
+    buf[3] = 0x00;
+    const err = getError(() => parseFrame(buf));
+    expect(err.code).toBe("CODEC-PAYLOAD-NOT-JSON");
   });
 
   it("ENC=1 frames", () => {
@@ -239,7 +285,7 @@ describe("parseFrame — rejects", () => {
     buf[3] = 0x01;
     buf[4] = 0xff;
     const err = getError(() => parseFrame(buf));
-    expect(err.code).toBe("NCP-PAYLOAD-NOT-JSON");
+    expect(err.code).toBe("CODEC-PAYLOAD-NOT-JSON");
   });
 
   it("non-JSON payload bytes", () => {
@@ -251,7 +297,7 @@ describe("parseFrame — rejects", () => {
     buf[3] = payload.length;
     buf.set(payload, FIXED_HEADER_BYTES);
     const err = getError(() => parseFrame(buf));
-    expect(err.code).toBe("NCP-PAYLOAD-NOT-JSON");
+    expect(err.code).toBe("CODEC-PAYLOAD-NOT-JSON");
   });
 
   it("deprecated AlignFrame (0x05) parses for receive-side compatibility", () => {
