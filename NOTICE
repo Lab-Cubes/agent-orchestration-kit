@@ -1,0 +1,8 @@
+nps-kit
+Copyright 2026 Lab-Cubes
+
+This product includes software developed at Lab-Cubes.
+
+This kit implements the NPS (Neural Protocol Suite) specification
+authored by Ori Lynn / INNO LOTUS PTY LTD (LabAcacia). The NPS spec
+is licensed under Apache 2.0; see https://github.com/labacacia/nps.
