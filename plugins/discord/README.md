@@ -5,9 +5,9 @@ Discord bot token — no external services or special infrastructure required.
 Posts worker lifecycle events (claimed, completed, failed) to a Discord channel
 via per-worker bot accounts.
 
-Zero coupling to the core kit — installs three hook scripts into
-`kits/agents/hooks/`, reads its own config, runs only when events fire. Uninstall
-is `rm` the hook files.
+Zero coupling to the core kit — installs 3 hook scripts + `_post.sh` + a symlink
+to `config.json` into `kits/agents/hooks/`, reads its own config, runs only when
+events fire. Uninstall is `rm` the hook files.
 
 **Optional convenience:** if you already store bot tokens in an `openclaw.json`
 file, set `token_from_openclaw` to read tokens from there and avoid duplicating
@@ -94,9 +94,13 @@ All messages suppressed if `channel_id` is empty or no token can be resolved —
 rm ../../kits/agents/hooks/on-task-claimed.sh
 rm ../../kits/agents/hooks/on-task-completed.sh
 rm ../../kits/agents/hooks/on-task-failed.sh
+rm ../../kits/agents/hooks/_post.sh
+rm ../../kits/agents/hooks/config.json  # (symlink)
 ```
 
-Leaves `config.json` in place. Re-install by running `./install.sh` again.
+Or use `./install.sh --uninstall` to remove everything in one step.
+
+Leaves `config.json` in place at `plugins/discord/config.json`. Re-install by running `./install.sh` again.
 
 ## Writing your own plugin
 
