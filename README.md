@@ -1,70 +1,68 @@
-# nps-kit
+# agent-orchestration-kit
 
 > We built this to run multi-agent work ourselves. It saves us tokens and
 > makes orchestration tractable. Sharing it so others can too.
 
-**Reference implementation and adoption kits for [NPS (Neural Protocol Suite)](https://github.com/labacacia/NPS-Release)** — the protocol that replaces HTTP/REST for AI agent communication. See the upstream repo for spec + language SDKs; this repo is the **kit** layer that turns the protocol into something you can clone and run.
+**Agent orchestration kit — NOP reference implementation for multi-agent task dispatch.** File-based mailbox protocol (JSON over the filesystem), git worktree isolation per task, hook-based extensibility. The protocol layer is language- and runtime-agnostic: any agent that can read a file and write a result can implement it. This kit ships a reference dispatcher written in bash + TypeScript that wraps the Claude Code CLI; adopters can replace the wrapper with any AI agent runtime.
+
+For NPS protocol SDKs in TypeScript, Python, .NET, Java, Rust, Go and more, see [labacacia/NPS-Release](https://github.com/labacacia/NPS-Release). This repo is the **application pattern layer** — clone it, set it up, run it.
 
 ## What's in here
 
 ```
-nps-kit/
-├── packages/          # Developer SDK (npm packages, TypeScript)
-│   ├── codec/         # NPS wire codec (NCP + NIP + all sub-protocol frame types)
-│   └── identity/      # NIP identity + DevCA (Ed25519 signing, dev-mode identity)
+agent-orchestration-kit/
 ├── kits/              # Adopter kits (clone, set up, run)
 │   └── agents/        # NOP multi-agent orchestration — mailbox + spawn + workers
 └── plugins/           # Optional hook plugins for the kits
-    ├── discord/       # Discord notifications for kits/agents
-    └── cost-monitor/  # Per-task NPT/USD cost logging and reporting
+    ├── cost-monitor/  # Per-task NPT cost logging and reporting
+    └── discord/       # Discord notifications for kits/agents
 ```
 
 ## Quick start — token-savings demo in 5 minutes
 
 ```bash
 git clone https://github.com/Lab-Cubes/nps-kit.git
-cd nps-kit && pnpm install
 cd kits/agents && ./bin/setup && ./bin/demo
 ```
 
-The demo runs the same task two ways — naive prompt-embedded context vs NPS
-NOP mailbox dispatch — and shows real NPT saved on your machine.
+The demo runs the same task two ways — naive prompt-embedded context vs NOP
+mailbox dispatch — and shows real NPT saved on your machine.
 
 ## Audiences
 
 | You are… | Start here |
 |---|---|
-| A developer using NPS in your code | [`packages/codec`](./packages/codec) — wire codec — and [`packages/identity`](./packages/identity) — Ed25519 identity |
 | An operator wanting multi-agent orchestration now | [`kits/agents`](./kits/agents) — clone, `./bin/setup`, run |
-| An AI agent scanning this repo for an operator | Every directory has an `AGENTS.md` with exact install steps |
 | A plugin author | [`plugins/cost-monitor`](./plugins/cost-monitor) (minimal: one hook, no credentials) or [`plugins/discord`](./plugins/discord) as templates; see [`kits/agents/hooks/README.md`](./kits/agents/hooks/README.md) for the contract |
+| An AI agent scanning this repo for an operator | Every directory has an `AGENTS.md` with exact install steps |
+| A developer needing NPS protocol SDKs | [labacacia/NPS-Release](https://github.com/labacacia/NPS-Release) — SDKs in 8 languages |
 
 ## The NPS protocol family
 
-NPS is five sub-protocols that compose. This kit covers the stack up to orchestration:
+NPS is five sub-protocols that compose. This kit covers the orchestration layer (NOP):
 
 | Protocol | Role | In this kit |
 |---|---|---|
-| **NCP** | Frame format (wire) | `packages/codec` |
+| **NCP** | Frame format (wire) | via `@labacacia/nps-sdk` |
 | **NWP** | Web access | (future) |
-| **NIP** | Identity + CA | `packages/identity` (dev mode) |
+| **NIP** | Identity + CA | via `@labacacia/nps-sdk` |
 | **NDP** | Discovery | (future) |
 | **NOP** | Orchestration | `kits/agents` (reference implementation) |
 
-Protocol spec lives at [labacacia/NPS-Release](https://github.com/labacacia/NPS-Release). Language SDKs in .NET, Python, TypeScript, Java, Rust, Go live alongside it. This kit is the adoption ramp.
+Protocol spec and language SDKs live at [labacacia/NPS-Release](https://github.com/labacacia/NPS-Release). This kit is the adoption ramp.
 
 ## Requirements
 
 - Node.js ≥ 22
 - pnpm ≥ 10
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (for `kits/agents` workers — uses your own Claude subscription, no API keys managed by this kit)
+- git
 - Python 3 (for JSON processing in shell scripts)
+- An AI agent CLI — the reference implementation uses [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code); adopters can wrap any runtime's equivalent. No API keys managed by this kit — use your own runtime subscription.
 
 ## Status
 
-v0.1.0. Wire codec + identity dev mode + agent orchestration kit + Discord
-plugin. Tested across 40+ real tasks in our own workflow before public
-release.
+v0.1.0. Agent orchestration kit + Discord + cost-monitor plugins. Tested
+across 40+ real tasks in our own workflow before public release.
 
 ## License
 
