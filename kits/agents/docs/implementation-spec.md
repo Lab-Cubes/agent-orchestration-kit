@@ -280,7 +280,7 @@ Dev mode uses domain `dev.localhost`. Production uses your org's registered doma
 
 NPT (NPS Token) is the cross-model standardized unit from NPS-0 §4.3.
 
-**v0.1.0 approximation:** sum of all token counts from the Claude Code CLI output.
+**v0.1.0 approximation:** sum of all token counts reported by the agent runtime (e.g., Claude Code CLI output, OpenAI API `usage` field, etc.).
 
 ```
 NPT ≈ input_tokens + output_tokens + cache_read_tokens
@@ -326,7 +326,7 @@ Copy `config.example.json` to `config.json`. Edit before first use.
 | `category_budget_npt.ops`     | integer  | `30000`         | NPT cap for `ops` category tasks.                              |
 | `default_model`               | string   | `sonnet`        | Model used when `constraints.model` is not set in intent.      |
 | `default_time_limit_s`        | integer  | `900`           | Wall-clock seconds before timeout. Hard stop.                  |
-| `default_max_turns`           | integer  | `100`           | Safety net turn count for Claude Code CLI.                     |
+| `default_max_turns`           | integer  | `100`           | Safety net turn count for the agent runtime CLI.               |
 
 Env var overrides (set in `.env`):
 
@@ -405,3 +405,68 @@ Use this checklist to verify a new runtime port implements the protocol correctl
 - [ ] Git conflict → write `failed` result with `NOP-TASK-GIT-CONFLICT`.
 - [ ] Unclear instructions → write `blocked` result with `NOP-TASK-UNCLEAR`.
 - [ ] Scope expansion attempted → write `failed` result with `NOP-DELEGATE-SCOPE-VIOLATION`.
+
+---
+
+## 11. Runtime-specific touchpoints (reference impl = Claude Code CLI)
+
+The NOP mailbox protocol (§2–7) is runtime-agnostic: files + JSON, any language
+or runtime can implement it. The reference dispatcher wraps the Claude Code CLI.
+The items below are the integration points a port must customize.
+
+### Subprocess invocation
+
+The reference calls:
+
+```bash
+claude -p '<prompt>' \
+  --add-dir <scope> \
+  --max-budget-usd <cap> \
+  --output-format json \
+  --model <model> \
+  --permission-mode dontAsk \
+  --allowedTools '...' \
+  --max-turns <n>
+```
+
+A port replaces this line with the target runtime's equivalent invocation.
+
+### Cost reporting
+
+The reference parses `total_cost_usd`, `usage.input_tokens`,
+`usage.output_tokens`, `usage.cache_read_input_tokens` from the Claude CLI's
+JSON output. Other runtimes report differently — OpenAI API returns
+`usage.prompt_tokens` + `usage.completion_tokens`; local models may report
+nothing. The port adjusts the parser and the NPT-approximation formula (§8)
+accordingly.
+
+### Scope permissions
+
+`--add-dir` grants the Claude CLI read/write access to a directory. Other
+runtimes use different mechanisms — the OpenAI API has no direct equivalent;
+scope is then enforced by tool-call validation in the wrapper. The port
+implements scope enforcement appropriate to its runtime.
+
+### Budget ceiling
+
+`--max-budget-usd` is the Claude CLI's hard kill-switch. Other runtimes may
+lack an equivalent; ports can implement their own budget tracking via the turn
+counter or a cost accumulator that aborts when `budget_npt` is exceeded.
+
+### Model selection
+
+The `--model` flag accepts Claude model names (`haiku`, `sonnet`, `opus`). For
+other runtimes, pass the appropriate model identifier for that API.
+
+### Bootstrap convention
+
+Workers read `CLAUDE.md` at their agent directory to bootstrap identity and
+protocol. Claude Code loads this file automatically. Other runtimes may require
+a different file name or loading mechanism — adjust `templates/AGENT-CLAUDE.md`
+and the worker spawn logic accordingly.
+
+### Output format
+
+The reference expects `--output-format json` with a single top-level JSON
+document. Other runtimes may stream tokens or emit a different shape. The
+parser in `spawn-agent.sh`'s dispatch function is the integration point.
