@@ -6,7 +6,7 @@
   "$comment_issuer": "Domain fragment in NIDs: urn:nps:agent:{issuer_domain}:{agent_id}. 'dev.localhost' matches @nps-kit/identity DevCA. Override in production with your Org CA's domain.",
 
   "issuer_agent_id": "operator",
-  "$comment_issuer_agent": "The agent_id that issued/dispatched tasks. Sage, opus, main-agent, or whatever your orchestrator calls itself.",
+  "$comment_issuer_agent": "The agent_id that issued/dispatched tasks. main-agent, orchestrator, dispatcher, or whatever your orchestrator calls itself.",
 
   "default_capabilities": [
     "nop:execute"
