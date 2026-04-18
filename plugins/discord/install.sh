@@ -38,7 +38,7 @@ fi
 if [[ ! -f "$PLUGIN_DIR/config.json" ]]; then
     warn "config.json not found. Create it first:"
     warn "  cp config.example.json config.json"
-    warn "  # then edit config.json to add channel_id + bot_token"
+    warn "  # then edit config.json to add channel_id + account token(s)"
     exit 1
 fi
 
