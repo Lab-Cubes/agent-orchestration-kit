@@ -1,0 +1,16 @@
+{
+  "channel_id": "111222333444555666",
+  "accounts": {
+    "default": { "token": "TEST_TOKEN_DEFAULT_FAKE", "display_name": "test-agent" },
+    "coder1":  { "token": "TEST_TOKEN_CODER1_FAKE",  "display_name": "coder-01" }
+  },
+  "worker_map": {
+    "coder-01": "coder1"
+  },
+  "token_from_openclaw": "",
+  "messages": {
+    "task_claimed":   "\ud83d\udd28 {account} claimed {task_id}",
+    "task_completed": "\u2705 {account} completed {task_id} ({cost_npt} NPT)",
+    "task_failed":    "\u274c {account} failed {task_id}"
+  }
+}

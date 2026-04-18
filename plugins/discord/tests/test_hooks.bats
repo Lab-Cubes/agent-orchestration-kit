@@ -111,7 +111,7 @@ teardown() {
         cp "$PLUGIN_SRC/$f" "$ENVVAR_TMPDIR/$f"
         chmod +x "$ENVVAR_TMPDIR/$f"
     done
-    cp "$FIXTURES/config.json" "$ENVVAR_TMPDIR/config.json"
+    cp "$FIXTURES/valid_config.json" "$ENVVAR_TMPDIR/config.json"
 
     CURL_ARGS_FILE="$ENVVAR_TMPDIR/curl_args"
     > "$CURL_ARGS_FILE"
