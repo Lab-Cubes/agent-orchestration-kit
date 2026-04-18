@@ -1,6 +1,6 @@
 # @nps-kit/identity
 
-NIP (Neural Identity Protocol) implementation for [NPS](https://github.com/labacacia/nps), per **NPS-3 v0.2**.
+NIP (Neural Identity Protocol) implementation for [NPS](https://github.com/labacacia/NPS-Release), per **NPS-3 v0.2**.
 
 v0.1.0 ships **dev mode only** — a per-process self-contained CA that issues
 signed `IdentFrame`s to agents. Verification, production-mode CA integration,
