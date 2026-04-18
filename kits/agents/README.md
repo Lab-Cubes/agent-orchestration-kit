@@ -106,7 +106,8 @@ Discord plugin: `cd ../../plugins/discord && ./install.sh`.
 
 Runs on your Claude Code subscription — no API keys managed by this kit.
 NPT budgets cap per-task spend (NPS-0 §4.3 standardized unit, approximated as
-input + output + cache_read tokens for v0.1.0).
+input + output + cache_read tokens for v0.1.0; full NPS-0 §4.3 normalization
+across model tiers arrives in v0.2.0).
 
 ## Status
 
