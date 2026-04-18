@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# bin/setup — First-run kit setup.
+#
+# Bootstraps a fresh clone for immediate use: copies example configs if
+# absent, creates runtime directories, sets up three default workers
+# (coder-01, critic-01, researcher-01), installs an identity mark so
+# the demo knows the install is complete.
+#
+# Safe to re-run. Won't overwrite existing configs or workers.
+
+set -euo pipefail
+
+NPS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$NPS_DIR"
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+say()  { echo -e "${GREEN}[setup]${NC} $*"; }
+warn() { echo -e "${YELLOW}[setup]${NC} $*"; }
+
+# 1. Configs
+if [[ ! -f .env ]]; then
+    cp .env.example .env
+    say "Created .env from .env.example"
+fi
+
+if [[ ! -f config.json ]]; then
+    cp config.example.json config.json
+    say "Created config.json from config.example.json"
+fi
+
+# 2. Runtime directories
+mkdir -p agents worktrees logs
+say "Runtime directories ready (agents/ worktrees/ logs/)"
+
+# 3. Default workers
+for trio in "coder-01 coder" "critic-01 critic" "researcher-01 researcher"; do
+    set -- $trio
+    agent_id="$1"
+    agent_type="$2"
+    if [[ -d "agents/$agent_id" ]]; then
+        warn "Worker $agent_id already exists — skipping"
+    else
+        ./scripts/spawn-agent.sh setup "$agent_id" "$agent_type" > /dev/null
+        say "Worker ready: $agent_id ($agent_type)"
+    fi
+done
+
+# 4. Install marker
+date -u +%Y-%m-%dT%H:%M:%SZ > .nps-installed
+say "Install mark written to .nps-installed"
+
+echo ""
+say "Setup complete."
+echo ""
+echo "Next steps:"
+echo "  ./bin/demo                              # Run the token-savings demo"
+echo "  ./scripts/spawn-agent.sh status coder-01  # Inspect a worker"
+echo "  edit config.json                        # Customize for your org"
