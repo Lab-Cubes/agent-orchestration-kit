@@ -1,6 +1,6 @@
 # @nps-kit/codec
 
-NPS wire codec — frame builder/parser for the full [NPS (Neural Protocol Suite)](https://github.com/labacacia/nps) frame range.
+NPS wire codec — frame builder/parser for the full [NPS (Neural Protocol Suite)](https://github.com/labacacia/NPS-Release) frame range.
 
 Implements the 4-byte fixed-header wire format from **NPS-1 §3.1** with Tier-1 JSON
 payload encoding (Flags T0=0, T1=0). Accepts any frame code in the NPS sub-protocol
