@@ -20,7 +20,6 @@
     "coder-02":     "coder2",
     "critic-01":    "critic",
     "researcher-01":"researcher",
-    "sage":         "orchestrator",
     "dispatcher":   "orchestrator"
   },
 
