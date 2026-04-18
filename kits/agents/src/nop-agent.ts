@@ -8,8 +8,9 @@
 
 import { readFileSync, writeFileSync, readdirSync, renameSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { IntentMessage, ResultMessage } from "./types.ts";
-import { MAILBOX_DEFAULTS, FILE_EXTENSIONS } from "./types.ts";
+import type { IntentMessage, ResultMessage } from "@nps-kit/codec";
+import { buildNid } from "@nps-kit/identity";
+import { MAILBOX_DEFAULTS, FILE_EXTENSIONS } from "./types.js";
 
 const AGENT_ID = process.env.NPS_AGENT_ID ?? "echo-agent";
 const AGENTS_HOME = resolve(process.env.NPS_AGENTS_HOME ?? "./agents");
@@ -69,7 +70,7 @@ const result: ResultMessage = {
     _nop: 1,
     id: taskId,
     status: "completed",
-    from: `urn:nps:agent:${ISSUER_DOMAIN}:${AGENT_ID}`,
+    from: buildNid("agent", ISSUER_DOMAIN, AGENT_ID),
     picked_up_at: pickedUpAt,
     completed_at: completedAt,
     files_changed: [],

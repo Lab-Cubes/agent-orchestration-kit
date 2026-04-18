@@ -17,6 +17,9 @@ importers:
       '@nps-kit/codec':
         specifier: workspace:*
         version: link:../../packages/codec
+      '@nps-kit/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
     devDependencies:
       '@types/node':
         specifier: ^22.10.0
