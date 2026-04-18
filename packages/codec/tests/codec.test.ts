@@ -9,8 +9,11 @@ import {
   FIXED_HEADER_BYTES,
   FrameType,
   type HelloFramePayload,
+  type IdentFramePayload,
   MAX_FIXED_PAYLOAD,
+  type RevokeFramePayload,
   type StreamFramePayload,
+  type TrustFramePayload,
   buildFrame,
   parseFrame,
 } from "../src/index.js";
@@ -105,6 +108,55 @@ describe("buildFrame / parseFrame round-trips", () => {
     assertRoundTrip(FrameType.HelloFrame, payload);
   });
 
+  it("IdentFrame (0x20)", () => {
+    const payload: IdentFramePayload = {
+      frame: "0x20",
+      nid: "urn:nps:agent:ca.innolotus.com:550e8400-e29b-41d4",
+      pub_key: "ed25519:MCowBQYDK2VwAyEA1234567890abcdef",
+      capabilities: ["nwp:query", "nwp:action", "ncp:stream"],
+      scope: {
+        nodes: ["nwp://api.myapp.com/*"],
+        actions: ["orders:read", "orders:create"],
+        max_token_budget: 50000,
+      },
+      issued_by: "urn:nps:org:mycompany.com",
+      issued_at: "2026-04-10T00:00:00Z",
+      expires_at: "2026-05-10T00:00:00Z",
+      serial: "0x0A3F9C",
+      signature: "ed25519:3045022100abcdef",
+      metadata: {
+        model_family: "anthropic/claude-4",
+        tokenizer: "cl100k_base",
+      },
+    };
+    assertRoundTrip(FrameType.IdentFrame, payload);
+  });
+
+  it("TrustFrame (0x21)", () => {
+    const payload: TrustFramePayload = {
+      frame: "0x21",
+      grantor_nid: "urn:nps:org:org-a.com",
+      grantee_ca: "urn:nps:org:org-b.com",
+      trust_scope: ["nwp:query"],
+      nodes: ["nwp://api.org-a.com/public/*"],
+      expires_at: "2026-12-31T00:00:00Z",
+      signature: "ed25519:abcdef",
+    };
+    assertRoundTrip(FrameType.TrustFrame, payload);
+  });
+
+  it("RevokeFrame (0x22)", () => {
+    const payload: RevokeFramePayload = {
+      frame: "0x22",
+      target_nid: "urn:nps:agent:ca.innolotus.com:550e8400-e29b-41d4",
+      serial: "0x0A3F9C",
+      reason: "key_compromise",
+      revoked_at: "2026-04-10T12:00:00Z",
+      signature: "ed25519:abcdef",
+    };
+    assertRoundTrip(FrameType.RevokeFrame, payload);
+  });
+
   it("ErrorFrame (0xFE)", () => {
     const payload: ErrorFramePayload = {
       frame: "0xFE",
@@ -171,10 +223,18 @@ describe("buildFrame — rejects", () => {
     );
   });
 
-  it("NWP-range frame types (0x10+)", () => {
-    const err = getError(() => buildFrame(0x10, {}));
+  it("out-of-NPS-range frame types (0x50+)", () => {
+    const err = getError(() => buildFrame(0x50, {}));
     expect(err).toBeInstanceOf(CodecError);
     expect(err.code).toBe("NCP-FRAME-UNKNOWN-TYPE");
+  });
+
+  it("still accepts NWP range (0x10) now that widening covers all NPS frames", () => {
+    // Codec builds any in-range frame as Tier-1 JSON; sub-protocol semantics
+    // are the caller's responsibility.
+    const bytes = buildFrame(0x10, { frame: "0x10", query: "products" });
+    const parsed = parseFrame(bytes);
+    expect(parsed.type).toBe(0x10);
   });
 
   it("Tier-2 MsgPack requests (v0.1.0 tier-1 only)", () => {
@@ -225,11 +285,11 @@ describe("buildFrame — rejects", () => {
 });
 
 describe("parseFrame — rejects", () => {
-  it("frames with a type outside the NCP range and not 0xFE", () => {
-    // Manually construct a 0x40 (NOP TaskFrame) frame.
+  it("frames with a type outside the NPS range (0x50+) and not 0xFE", () => {
+    // 0x50 falls outside all NPS sub-protocol ranges (highest is NOP 0x40-0x4F).
     const payload = new TextEncoder().encode("{}");
     const buf = new Uint8Array(FIXED_HEADER_BYTES + payload.length);
-    buf[0] = 0x40;
+    buf[0] = 0x50;
     buf[1] = 0b0000_0100;
     buf[2] = 0x00;
     buf[3] = payload.length;

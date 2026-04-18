@@ -1,7 +1,7 @@
 {
   "name": "@nps-kit/codec",
-  "version": "0.1.0",
-  "description": "NCP frame builder/parser for NPS (Neural Protocol Suite). Tier-1 JSON encoding, 4-byte fixed header per NPS-1 §3.1.",
+  "version": "0.1.1",
+  "description": "NPS wire codec — frame builder/parser for all sub-protocol ranges (0x01-0x4F + 0xFE). Tier-1 JSON encoding, 4-byte fixed header per NPS-1 §3.1.",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",

@@ -83,10 +83,67 @@ export interface ErrorFramePayload {
   readonly details?: Readonly<Record<string, unknown>>;
 }
 
+/* ── NIP (NPS-3) ────────────────────────────────────────────────────────── */
+
+export interface NipScope {
+  readonly nodes: readonly string[];
+  readonly actions: readonly string[];
+  readonly max_token_budget: number;
+}
+
+export interface IdentFrameMetadata {
+  readonly model_family?: string;
+  readonly tokenizer?: string;
+  readonly runtime?: string;
+}
+
+export interface IdentFramePayload {
+  readonly frame: "0x20";
+  readonly nid: string;
+  readonly pub_key: string;
+  readonly capabilities: readonly string[];
+  readonly scope: NipScope;
+  readonly issued_by: string;
+  readonly issued_at: string;
+  readonly expires_at: string;
+  readonly serial: string;
+  readonly signature: string;
+  readonly metadata?: IdentFrameMetadata;
+}
+
+export interface TrustFramePayload {
+  readonly frame: "0x21";
+  readonly grantor_nid: string;
+  readonly grantee_ca: string;
+  readonly trust_scope: readonly string[];
+  readonly nodes: readonly string[];
+  readonly expires_at: string;
+  readonly signature: string;
+}
+
+export type RevokeReason =
+  | "key_compromise"
+  | "ca_compromise"
+  | "affiliation_changed"
+  | "superseded"
+  | "cessation_of_operation";
+
+export interface RevokeFramePayload {
+  readonly frame: "0x22";
+  readonly target_nid: string;
+  readonly serial: string;
+  readonly reason: RevokeReason;
+  readonly revoked_at: string;
+  readonly signature: string;
+}
+
 export type KnownFramePayload =
   | AnchorFramePayload
   | DiffFramePayload
   | StreamFramePayload
   | CapsFramePayload
   | HelloFramePayload
+  | IdentFramePayload
+  | TrustFramePayload
+  | RevokeFramePayload
   | ErrorFramePayload;

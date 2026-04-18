@@ -10,7 +10,7 @@ import {
   decodeFixedHeader,
   encodeFixedHeader,
 } from "./header.js";
-import { FrameType, isNcpRangeOrError } from "./frame-types.js";
+import { FrameType, isValidFrameType } from "./frame-types.js";
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
@@ -66,10 +66,10 @@ export function buildFrame(
       { type },
     );
   }
-  if (!isNcpRangeOrError(type)) {
+  if (!isValidFrameType(type)) {
     throw new CodecError(
       "NCP-FRAME-UNKNOWN-TYPE",
-      `Frame type 0x${type.toString(16).padStart(2, "0")} is outside the NCP range (0x01-0x0F) and is not the shared ErrorFrame (0xFE)`,
+      `Frame type 0x${type.toString(16).padStart(2, "0")} is outside the NPS frame range (0x01-0x4F) and is not the shared ErrorFrame (0xFE)`,
       { type },
     );
   }
@@ -147,10 +147,10 @@ export function buildFrame(
 export function parseFrame<T = unknown>(input: Uint8Array): ParsedFrame<T> {
   const header = decodeFixedHeader(input);
 
-  if (!isNcpRangeOrError(header.type)) {
+  if (!isValidFrameType(header.type)) {
     throw new CodecError(
       "NCP-FRAME-UNKNOWN-TYPE",
-      `Frame type 0x${header.type.toString(16).padStart(2, "0")} is outside the NCP range (0x01-0x0F) and is not the shared ErrorFrame (0xFE)`,
+      `Frame type 0x${header.type.toString(16).padStart(2, "0")} is outside the NPS frame range (0x01-0x4F) and is not the shared ErrorFrame (0xFE)`,
       { type: header.type },
     );
   }

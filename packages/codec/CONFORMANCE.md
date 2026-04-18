@@ -1,10 +1,15 @@
-# @nps-kit/codec — NPS-1 (NCP) Conformance Matrix
+# @nps-kit/codec — NPS Wire Codec Conformance Matrix
 
-Spec target: **NPS-1 v0.4** (dated 2026-04-14, per local clone at `labacacia/nps`).
-Package version: **@nps-kit/codec@0.1.0**.
+Spec targets:
+- **NPS-0 v0.2** — frame namespace (§6), address format (§5), transport modes (§3)
+- **NPS-1 v0.4** — wire format primary spec for NCP frames
+- **NPS-3 v0.2** — advisory payload types for NIP frames (0x20-0x22)
 
-This document maps every NCP spec clause to the codec's v0.1.0 coverage. Use it to
-decide whether this codec is safe for your use case.
+Package version: **@nps-kit/codec@0.1.1** (widened from 0.1.0 NCP-only to full NPS frame range).
+
+This document maps every NCP spec clause to the codec's coverage, plus the wire-format
+coverage for non-NCP frames (NIP today; NWP/NDP/NOP accepted as opaque JSON bodies
+until their own packages ship).
 
 | Status | Meaning |
 |---|---|
@@ -21,7 +26,7 @@ decide whether this codec is safe for your use case.
 |---|---|---|---|
 | §2.1 | Sender / Receiver / Relay roles | ➖ N/A | Runtime roles; codec is role-neutral |
 | §2.2 | HTTP mode vs native mode | ➖ N/A | Codec produces wire bytes; transport is separate |
-| §2.3 | Unified port 17433, frame-type routing ranges | ✅ | `isNcpRangeOrError` gates 0x01–0x0F + 0xFE |
+| §2.3 | Unified port 17433, frame-type routing ranges | ✅ | `isValidFrameType` gates 0x01–0x4F (all NPS sub-protocols per NPS-0 §6) + 0xFE |
 | §2.4 | Frame exchange patterns (req/resp, stream, etc.) | ➖ N/A | Exchange choreography is a runtime concern |
 | §2.5 | Connection state machine | ➖ N/A | Transport-layer concern |
 | §2.6 | Native handshake sequence + version negotiation | ⚠ Partial | HelloFrame / CapsFrame **build + parse** covered; 5-second timeout and `min(version)` selection belong to the transport layer |
@@ -37,17 +42,23 @@ decide whether this codec is safe for your use case.
 | §3.3 | `max_frame_payload` default 65,535 | ✅ | `MAX_FIXED_PAYLOAD = 0xFFFF` enforced at build |
 | §3.3 | Payload > limit **MUST** use StreamFrame fragmentation | ⚠ Partial | Codec throws `NCP-FRAME-PAYLOAD-TOO-LARGE` with a pointer to StreamFrame; fragmentation decision is the caller's |
 
-## §4 Frame Types
+## §4 Frame Types (NCP, plus NIP/NWP/NDP/NOP wire-format coverage)
 
 | Code | Frame | Status | Notes |
 |---|---|---|---|
-| **0x01** | AnchorFrame | ⚠ Partial | Build + parse of the frame shape covered. **`anchor_id` JCS+SHA-256 computation is NOT in scope** — belongs to a separate `@nps-kit/anchor-id` helper (or can live in identity/topology). Callers MUST compute `anchor_id` per §4.1 (RFC 8785 JCS over `schema`, then SHA-256) before passing into `buildFrame` |
+| **0x01** | AnchorFrame (NCP) | ⚠ Partial | Build + parse of the frame shape covered. `anchor_id` SHA-256 computation + canonical JSON hashing is caller's job for now; `canonicalize()` is planned as a v0.1.1 export — see §9 implementation notes below |
 | **0x02** | DiffFrame | ✅ with caveat | `patch_format: "json_patch"` round-trips cleanly. `patch_format: "binary_bitset"` requires Tier-2 MsgPack and is therefore 🔸 deferred |
 | **0x03** | StreamFrame | ⚠ Partial | Build + parse covered, including `window_size` and `error_code` fields. Flow-control **semantics** (window depletion, reverse-direction window updates, `NCP-STREAM-WINDOW-OVERFLOW`) are a runtime concern — codec only wires the bytes |
 | **0x04** | CapsFrame | ⚠ Partial | Build + parse covered (`anchor_ref`, `count`, `data`, `next_cursor`, `token_est`, `cached`, `inline_anchor`). The invariant `count === data.length` is the caller's responsibility; codec does not enforce. `inline_anchor` nested-verify (§5.4.1) is also caller's job |
 | **0x05** | AlignFrame (deprecated per §4.5) | ✅ | `buildFrame` rejects with `NCP-FRAME-UNKNOWN-TYPE` and points to NOP AlignStream (0x43). `parseFrame` accepts for receive-side compatibility with legacy peers |
-| **0x06** | HelloFrame | ✅ | Build + parse covered including `nps_version`, `min_version`, `supported_encodings`, `supported_protocols`, `agent_id`, `max_frame_payload`, `ext_support`, `max_concurrent_streams`, `e2e_enc_algorithms`. First-frame ordering (§4.6) is a transport concern |
-| **0xFE** | ErrorFrame | ✅ | Build + parse covered |
+| **0x06** | HelloFrame (NCP) | ✅ | Build + parse covered including `nps_version`, `min_version`, `supported_encodings`, `supported_protocols`, `agent_id`, `max_frame_payload`, `ext_support`, `max_concurrent_streams`, `e2e_enc_algorithms`. First-frame ordering (§4.6) is a transport concern |
+| **0x10-0x1F** | NWP frames | ⚠ Wire-only | Codec accepts any NWP frame code, parses payload as Tier-1 JSON. NWP semantics (QueryFrame filter grammar, ActionFrame idempotency, SubscribeFrame flow) live in a future `@nps-kit/nwp` package |
+| **0x20** | IdentFrame (NIP) | ⚠ Wire-only | Advisory `IdentFramePayload` type exported per NPS-3 §5.1. Codec builds + parses the JSON envelope; signing, verification, scope-carving, and renewal live in `@nps-kit/identity` |
+| **0x21** | TrustFrame (NIP) | ⚠ Wire-only | Advisory `TrustFramePayload` type exported per NPS-3 §5.2. Cross-CA trust signatures are identity's concern |
+| **0x22** | RevokeFrame (NIP) | ⚠ Wire-only | Advisory `RevokeFramePayload` type + `RevokeReason` union exported per NPS-3 §5.3 |
+| **0x30-0x3F** | NDP frames | ⚠ Wire-only | Codec accepts; NDP semantics (AnnounceFrame TTL, GraphFrame sync) live in a future `@nps-kit/topology` package |
+| **0x40-0x4F** | NOP frames | ⚠ Wire-only | Codec accepts; NOP semantics (TaskFrame DAG acyclicity, DelegateFrame scope carving per NPS-5 §8.5, SyncFrame K-of-N) live in a future `@nps-kit/orchestrator` package |
+| **0xFE** | ErrorFrame (System) | ✅ | Build + parse covered. Shared by all sub-protocols per NPS-1 §4.7 |
 
 ## §5 Schema Anchoring
 

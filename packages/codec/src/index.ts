@@ -17,6 +17,7 @@ export {
   FrameType,
   type FrameTypeCode,
   isKnownFrameType,
+  isValidFrameType,
 } from "./frame-types.js";
 export {
   type AnchorFrameField,
@@ -25,8 +26,14 @@ export {
   type DiffFramePayload,
   type ErrorFramePayload,
   type HelloFramePayload,
+  type IdentFrameMetadata,
+  type IdentFramePayload,
   type KnownFramePayload,
+  type NipScope,
+  type RevokeFramePayload,
+  type RevokeReason,
   type StreamFramePayload,
+  type TrustFramePayload,
 } from "./payloads.js";
 export {
   type BuildFrameOptions,
