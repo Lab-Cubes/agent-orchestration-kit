@@ -68,7 +68,9 @@ echo ""
 # between each other today.
 # ---------------------------------------------------------------------------
 
-say "Path 1 — naive (full document inline in prompt)"
+say "Running Path 1 (naive) + Path 2 (NOP) concurrently..."
+say "  Path 1: claude CLI with full document inlined in prompt"
+say "  Path 2: NOP dispatch, worker reads document from scope"
 
 NAIVE_PROMPT="You are a summariser. Produce exactly one paragraph summarising the document below. Output only the paragraph.
 
@@ -76,68 +78,71 @@ DOCUMENT:
 
 $(cat "$SUBJECT_FILE")"
 
-naive_start=$(date +%s)
-naive_output=$(claude -p "$NAIVE_PROMPT" \
-    --model sonnet \
-    --permission-mode dontAsk \
-    --max-turns 2 \
-    --output-format json 2>&1 | grep '^{' | head -1 || echo '{}')
-naive_end=$(date +%s)
-naive_duration=$((naive_end - naive_start))
-
-naive_stats=$(python3 -c "
-import json, sys
-d = json.loads('''$naive_output''') if '''$naive_output'''.strip().startswith('{') else {}
-u = d.get('usage', {}) or {}
-i = u.get('input_tokens', 0) or 0
-o = u.get('output_tokens', 0) or 0
-c = u.get('cache_read_input_tokens', 0) or 0
-npt = i + o + c
-print(f'{npt}|{d.get(\"total_cost_usd\", 0):.4f}')
-" 2>/dev/null || echo "0|0.0000")
-
-naive_npt="${naive_stats%%|*}"
-naive_usd="${naive_stats##*|}"
-say "  Path 1 result: ${naive_npt} NPT (~\$${naive_usd}), ${naive_duration}s"
-
-# ---------------------------------------------------------------------------
-# PATH 2 — NOP dispatch
-#
-# The orchestrator writes a small intent message into the worker's inbox
-# and launches the worker. The worker reads the document from its local
-# scope — its input tokens are the intent + its CLAUDE.md bootstrap, NOT
-# a duplicated copy of the document. That's where the saving lives.
-# ---------------------------------------------------------------------------
-
-echo ""
-say "Path 2 — NOP dispatch (worker reads document from scope)"
-
-# Ensure researcher-01 is clean (no leftover inbox)
 ./scripts/spawn-agent.sh clean researcher-01 > /dev/null 2>&1 || true
 
-nop_start=$(date +%s)
-./scripts/spawn-agent.sh dispatch researcher-01 "$TASK_INTENT" \
-    --scope "$NPS_DIR" \
-    --category research \
-    --model sonnet \
-    --max-turns 6 > /dev/null 2>&1 || true
-nop_end=$(date +%s)
-nop_duration=$((nop_end - nop_start))
+naive_out="$NPS_DIR/logs/demo-naive.json"
+nop_out="$NPS_DIR/logs/demo-nop.json"
+mkdir -p "$NPS_DIR/logs"
 
+# Run both paths concurrently. Each gets its own usage block in the JSON
+# response; NPT measurement is per-call so concurrency doesn't affect it.
+parallel_start=$(date +%s)
+
+(
+    claude -p "$NAIVE_PROMPT" \
+        --model sonnet \
+        --permission-mode dontAsk \
+        --max-turns 2 \
+        --output-format json 2>&1 | grep '^{' | head -1 > "$naive_out" || echo '{}' > "$naive_out"
+) &
+naive_pid=$!
+
+(
+    ./scripts/spawn-agent.sh dispatch researcher-01 "$TASK_INTENT" \
+        --scope "$NPS_DIR" \
+        --category research \
+        --model sonnet \
+        --max-turns 6 > /dev/null 2>&1 || true
+) &
+nop_pid=$!
+
+wait "$naive_pid" "$nop_pid"
+
+parallel_end=$(date +%s)
+parallel_duration=$((parallel_end - parallel_start))
+say "Both paths done in ${parallel_duration}s (concurrent)."
+
+# Extract Path 1 NPT from naive call's JSON
+naive_stats=$(python3 - "$naive_out" <<'PYEOF' 2>/dev/null || echo "0|0.0000"
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    d = {}
+u = d.get('usage') or {}
+npt = (u.get('input_tokens') or 0) + (u.get('output_tokens') or 0) + (u.get('cache_read_input_tokens') or 0)
+print(f"{npt}|{d.get('total_cost_usd', 0):.4f}")
+PYEOF
+)
+naive_npt="${naive_stats%%|*}"
+naive_usd="${naive_stats##*|}"
+
+# Extract Path 2 NPT from researcher-01's result.json
 nop_result_dir="$NPS_DIR/agents/researcher-01/done"
 latest_result=$(ls -t "$nop_result_dir"/*.result.json 2>/dev/null | head -1 || echo "")
-
 if [[ -n "$latest_result" ]]; then
-    nop_npt=$(python3 -c "
-import json
-d = json.load(open('$latest_result'))
+    nop_npt=$(python3 - "$latest_result" <<'PYEOF' 2>/dev/null || echo "0"
+import json, sys
+d = json.load(open(sys.argv[1]))
 print(d.get('payload', {}).get('cost_npt', 0))
-" 2>/dev/null || echo "0")
+PYEOF
+    )
 else
     nop_npt="0"
 fi
 
-say "  Path 2 result: ${nop_npt} NPT, ${nop_duration}s"
+say "  Path 1: ${naive_npt} NPT (~\$${naive_usd})"
+say "  Path 2: ${nop_npt} NPT"
 
 # ---------------------------------------------------------------------------
 # Comparison
