@@ -266,10 +266,10 @@ Org NID:
 ### Examples
 
 ```
-urn:nps:agent:cloverthe.ai:coder-01
+urn:nps:agent:your-org.example.com:coder-01
 urn:nps:agent:dev.localhost:researcher-01
 urn:nps:org:dev.localhost
-urn:nps:org:cloverthe.ai
+urn:nps:org:your-org.example.com
 ```
 
 Dev mode uses domain `dev.localhost`. Production uses your org's registered domain.
