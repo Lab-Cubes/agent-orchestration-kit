@@ -63,7 +63,7 @@ Protocol spec lives at [labacacia/NPS-Release](https://github.com/labacacia/NPS-
 ## Status
 
 v0.1.0. Wire codec + identity dev mode + agent orchestration kit + Discord
-plugin. Dogfooded across 40+ real tasks in our own workflow before public
+plugin. Tested across 40+ real tasks in our own workflow before public
 release.
 
 ## License
