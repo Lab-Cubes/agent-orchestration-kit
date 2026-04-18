@@ -1,0 +1,14 @@
+# Runtime state — never commit
+.env
+config.json
+agents/
+worktrees/
+logs/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# OS
+.DS_Store
