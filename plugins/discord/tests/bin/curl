@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Mock curl — captures all args to a file, exits 0. Never calls the real Discord API.
+echo "$@" >> "${CURL_ARGS_FILE:-/tmp/mock_curl_args_$$}"

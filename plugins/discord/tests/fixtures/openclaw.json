@@ -1,0 +1,10 @@
+{
+  "channels": {
+    "discord": {
+      "accounts": {
+        "default": { "token": "OPENCLAW_TOKEN_DEFAULT_FAKE" },
+        "coder1":  { "token": "OPENCLAW_TOKEN_CODER1_FAKE" }
+      }
+    }
+  }
+}
