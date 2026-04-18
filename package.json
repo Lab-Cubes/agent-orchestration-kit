@@ -1,9 +1,27 @@
 {
-  "name": "nps-kit",
+  "name": "agent-orchestration-kit",
   "private": true,
   "version": "0.1.0",
-  "description": "Agent orchestration kit — NOP reference implementation for multi-agent task dispatch. Part of the NPS (Neural Protocol Suite) ecosystem; protocol SDKs live at labacacia.",
+  "description": "Agent orchestration kit — NOP reference implementation for multi-agent task dispatch. Runtime-agnostic at the protocol layer; reference dispatcher wraps Claude Code CLI. Part of the NPS (Neural Protocol Suite) ecosystem; protocol SDKs live at labacacia.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lab-Cubes/agent-orchestration-kit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Lab-Cubes/agent-orchestration-kit/issues"
+  },
+  "homepage": "https://github.com/Lab-Cubes/agent-orchestration-kit#readme",
+  "keywords": [
+    "agent-orchestration",
+    "ai-agents",
+    "nop-protocol",
+    "mailbox-protocol",
+    "multi-agent",
+    "nps",
+    "claude-code"
+  ],
+  "author": "cloverthe.ai",
   "engines": {
     "node": ">=22"
   },
