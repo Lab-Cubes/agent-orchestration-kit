@@ -22,7 +22,7 @@ if [[ ! -d "$KIT_HOOKS_DIR" ]]; then
     exit 1
 fi
 
-HOOKS=(on-task-claimed.sh on-task-completed.sh on-task-failed.sh)
+HOOKS=(on-task-claimed.sh on-task-completed.sh on-task-failed.sh _post.sh)
 
 if [[ "${1:-}" == "--uninstall" ]]; then
     for hook in "${HOOKS[@]}"; do

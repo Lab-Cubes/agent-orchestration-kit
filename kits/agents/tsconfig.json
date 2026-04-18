@@ -1,8 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@nps-kit/codec": ["../../packages/codec/src/index.ts"],
+      "@nps-kit/identity": ["../../packages/identity/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

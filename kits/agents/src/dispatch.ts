@@ -3,8 +3,9 @@
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { IntentMessage } from "./types.ts";
-import { MAILBOX_DEFAULTS, FILE_EXTENSIONS } from "./types.ts";
+import type { IntentMessage } from "@nps-kit/codec";
+import { buildNid } from "@nps-kit/identity";
+import { MAILBOX_DEFAULTS, FILE_EXTENSIONS } from "./types.js";
 
 const workerId = process.argv[2];
 const intentText = process.argv[3];
@@ -30,8 +31,8 @@ const message: IntentMessage = {
   payload: {
     _nop: 1,
     id: taskId,
-    from: `urn:nps:agent:${ISSUER_DOMAIN}:${ISSUER_AGENT_ID}`,
-    to: `urn:nps:agent:${ISSUER_DOMAIN}:${workerId}`,
+    from: buildNid("agent", ISSUER_DOMAIN, ISSUER_AGENT_ID),
+    to: buildNid("agent", ISSUER_DOMAIN, workerId),
     created_at: now.toISOString(),
     priority: "normal",
     mailbox: { base: "./" },

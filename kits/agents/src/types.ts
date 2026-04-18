@@ -1,120 +1,32 @@
 // NOP Task Protocol — TypeScript Type Definitions
 //
-// NCP carries the envelope. NOP fills the payload.
-// IntentMessage dispatches. ResultMessage reports back.
+// Wire-protocol types (NCP envelope + NOP payload shapes) live in @nps-kit/codec.
+// This file re-exports them for kit consumers and adds filesystem-layer types
+// that are specific to the agents kit (task lifecycle, mailbox directory layout).
 //
 // Reference: NPS-5 (NOP) spec at https://github.com/labacacia/NPS-Release
 
 // -----------------------------------------------------------------------------
-// NCP Envelope Types
+// Wire-protocol types — re-exported from @nps-kit/codec
 // -----------------------------------------------------------------------------
 
-type NcpVersion = 1;
-
-export interface Alternative {
-  value: string;
-  probability: number;
-}
-
-// -----------------------------------------------------------------------------
-// NOP Payload Types — Intent (Dispatch)
-// -----------------------------------------------------------------------------
-
-type NopVersion = 1;
-
-export type Priority = "urgent" | "normal" | "low";
-
-export type TaskCategory = "code" | "research" | "docs" | "test" | "refactor" | "ops";
-
-export interface Mailbox {
-  base: string;
-  active?: string;
-  done?: string;
-}
-
-export interface TaskContext {
-  files?: string[];
-  knowledge?: string[];
-  branch?: string;
-}
-
-export interface TaskConstraints {
-  model?: string;
-  time_limit?: number;
-  scope?: string[];
-  /** If true, the worker pauses before file changes and waits for operator approval. */
-  proceed_gate?: boolean;
-  /** Max NPT the worker may consume for this task (NPS-0 §4.3). */
-  budget_npt?: number;
-}
-
-export interface NopIntentPayload {
-  _nop: NopVersion;
-  /** Unique task ID: task-{issuer}-{YYYYMMDD}-{HHMMSS} */
-  id: string;
-  /** Issuer NID (orchestrator who dispatched) */
-  from: string;
-  /** Target worker NID. Omit = any available worker picks up */
-  to?: string;
-  created_at: string;
-  priority?: Priority;
-  category?: TaskCategory;
-  mailbox: Mailbox;
-  context?: TaskContext;
-  constraints?: TaskConstraints;
-}
+export type {
+  Alternative,
+  IntentMessage,
+  Mailbox,
+  NopIntentPayload,
+  NopMessage,
+  NopResultPayload,
+  Priority,
+  ResultMessage,
+  TaskCategory,
+  TaskConstraints,
+  TaskContext,
+  TaskStatus,
+} from "@nps-kit/codec";
 
 // -----------------------------------------------------------------------------
-// NOP Payload Types — Result (Report Back)
-// -----------------------------------------------------------------------------
-
-export type TaskStatus = "completed" | "failed" | "timeout" | "blocked";
-
-export interface NopResultPayload {
-  _nop: NopVersion;
-  id: string;
-  status: TaskStatus;
-  from: string;
-  picked_up_at: string;
-  completed_at: string;
-  files_changed?: string[];
-  commits?: string[];
-  follow_up?: string[];
-  duration?: number;
-  /** NPT consumed executing this task. */
-  cost_npt?: number;
-  error?: string | null;
-}
-
-// -----------------------------------------------------------------------------
-// Full NCP+NOP Messages
-// -----------------------------------------------------------------------------
-
-export interface IntentMessage {
-  _ncp: NcpVersion;
-  type: "intent";
-  /** Short verb phrase: "fix-bug", "write-test", "research", "refactor" */
-  intent: string;
-  /** Orchestrator's confidence this is the right task/worker. 0-1 */
-  confidence: number;
-  payload: NopIntentPayload;
-}
-
-export interface ResultMessage {
-  _ncp: NcpVersion;
-  type: "result";
-  /** Human-readable summary of what was done */
-  value: string;
-  /** Worker's confidence in the result quality. 0-1 */
-  probability: number;
-  alternatives: Alternative[];
-  payload: NopResultPayload;
-}
-
-export type NopMessage = IntentMessage | ResultMessage;
-
-// -----------------------------------------------------------------------------
-// Task Lifecycle
+// Task Lifecycle — filesystem layer (kit-specific, not wire protocol)
 // -----------------------------------------------------------------------------
 
 export type TaskState =
