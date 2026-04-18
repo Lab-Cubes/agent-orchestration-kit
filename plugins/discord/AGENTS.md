@@ -28,8 +28,8 @@ cp config.example.json config.json
 
 Edit `config.json`:
 - Replace `"channel_id": ""` with the operator's channel ID
-- Replace `"bot_token": ""` with the operator's bot token
-- Leave `accounts` default unless operator names specific agents
+- In each `accounts` entry, replace `"token": ""` with a real Discord bot token
+- Optionally edit `worker_map` to map NOP worker IDs to account names
 
 ```bash
 ./install.sh
@@ -67,7 +67,7 @@ Expected Discord channel output (two messages within ~90s):
 ```
 
 If no messages appear:
-- Check `config.json` — channel_id and bot_token must be non-empty
+- Check `config.json` — channel_id must be set and at least one account token must be non-empty
 - Check bot has `Send Messages` in the channel
 - Check `curl` is installed: `which curl`
 
@@ -95,7 +95,7 @@ Reinstall by re-running `./install.sh`.
 | "curl: command not found" | curl missing | Install curl via system package manager |
 | "401 Unauthorized" from Discord | Bad bot token | Operator resets token, updates config.json |
 | "403 Forbidden" from Discord | Bot lacks permissions in channel | Operator grants `Send Messages` permission |
-| No messages posting, no error | channel_id or bot_token is empty string | Fill config.json with real values |
+| No messages posting, no error | channel_id empty or all account tokens empty | Fill config.json with real values |
 
 Hook failures never block worker lifecycle — the worker completes its task
 even if Discord posts fail. The kit logs a warning and continues.
