@@ -28,7 +28,7 @@ setup_install_tree() {
     done
 
     # Provide a config.json so install.sh doesn't refuse to proceed
-    cp "$FIXTURES/config.json" "$MOCK_PLUGIN_DIR/config.json"
+    cp "$FIXTURES/valid_config.json" "$MOCK_PLUGIN_DIR/config.json"
 }
 
 setup() {

@@ -45,7 +45,7 @@ bats tests/test_install.bats
 ## Mock strategy
 
 - **curl**: `tests/bin/curl` is a shim that writes all args to a temp file (`$CURL_ARGS_FILE`) and exits 0. Each test prepends `tests/bin` to `$PATH` so the real Discord API is never called.
-- **Config fixtures**: `tests/fixtures/config.json` and `tests/fixtures/openclaw.json` use obvious placeholder tokens (`TEST_TOKEN_*_FAKE`, `OPENCLAW_TOKEN_*_FAKE`).
+- **Config fixtures**: `tests/fixtures/valid_config.json` and `tests/fixtures/openclaw.json` use obvious placeholder tokens (`TEST_TOKEN_*_FAKE`, `OPENCLAW_TOKEN_*_FAKE`). The file is named `valid_config.json` (not `config.json`) because the root `.gitignore` excludes `config.json` to prevent real credentials from being committed.
 - **Isolated plugin dirs**: each test creates a fresh `mktemp -d` tree so tests don't interfere with each other or with the real plugin source.
 
 ## Adding new tests
