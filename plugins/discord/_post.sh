@@ -88,6 +88,6 @@ PYEOF
 curl -s -X POST "https://discord.com/api/v10/channels/$CHANNEL/messages" \
     -H "Authorization: Bot $TOKEN" \
     -H "Content-Type: application/json" \
-    -H "User-Agent: DiscordBot (https://github.com/Lab-Cubes/nps-kit, 1.0)" \
+    -H "User-Agent: DiscordBot (https://github.com/Lab-Cubes/agent-orchestration-kit, 1.0)" \
     -d "$(python3 -c "import json,sys; print(json.dumps({'content':sys.argv[1]}))" "$MESSAGE")" \
     > /dev/null || true
