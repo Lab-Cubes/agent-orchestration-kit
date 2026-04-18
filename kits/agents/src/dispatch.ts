@@ -3,8 +3,8 @@
 
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { IntentMessage } from "@nps-kit/codec";
-import { buildNid } from "@nps-kit/identity";
+import type { IntentMessage } from "./nop-types.js";
+import { buildNid } from "./nop-types.js";
 import { MAILBOX_DEFAULTS, FILE_EXTENSIONS } from "./types.js";
 
 const workerId = process.argv[2];
