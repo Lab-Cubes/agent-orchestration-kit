@@ -8,8 +8,8 @@
 
 import { readFileSync, writeFileSync, readdirSync, renameSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { IntentMessage, ResultMessage } from "@nps-kit/codec";
-import { buildNid } from "@nps-kit/identity";
+import type { IntentMessage, ResultMessage } from "./nop-types.js";
+import { buildNid } from "./nop-types.js";
 import { MAILBOX_DEFAULTS, FILE_EXTENSIONS } from "./types.js";
 
 const AGENT_ID = process.env.NPS_AGENT_ID ?? "echo-agent";

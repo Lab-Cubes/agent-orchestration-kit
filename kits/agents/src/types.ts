@@ -1,13 +1,13 @@
 // NOP Task Protocol — TypeScript Type Definitions
 //
-// Wire-protocol types (NCP envelope + NOP payload shapes) live in @nps-kit/codec.
+// Wire-protocol types (NCP envelope + NOP payload shapes) are inlined in ./nop-types.ts.
 // This file re-exports them for kit consumers and adds filesystem-layer types
 // that are specific to the agents kit (task lifecycle, mailbox directory layout).
 //
 // Reference: NPS-5 (NOP) spec at https://github.com/labacacia/NPS-Release
 
 // -----------------------------------------------------------------------------
-// Wire-protocol types — re-exported from @nps-kit/codec
+// Wire-protocol types — re-exported from ./nop-types
 // -----------------------------------------------------------------------------
 
 export type {
@@ -23,7 +23,7 @@ export type {
   TaskConstraints,
   TaskContext,
   TaskStatus,
-} from "@nps-kit/codec";
+} from "./nop-types.js";
 
 // -----------------------------------------------------------------------------
 // Task Lifecycle — filesystem layer (kit-specific, not wire protocol)
