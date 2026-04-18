@@ -31,9 +31,9 @@ def find_config():
 
 
 def default_log_path():
-    # plugins/cost-monitor/  →  ../../nop/logs/dispatch-costs.csv
+    # plugins/cost-monitor/  →  ../../kits/agents/logs/dispatch-costs.csv
     plugin_dir = Path(__file__).resolve().parent.parent
-    return plugin_dir / ".." / ".." / "nop" / "logs" / "dispatch-costs.csv"
+    return plugin_dir / ".." / ".." / "kits" / "agents" / "logs" / "dispatch-costs.csv"
 
 
 def parse_cost(value):
@@ -58,10 +58,26 @@ def parse_row(row):
     timestamp, task_id, worker_id, model, category, priority,
     cost_usd, turns, duration_s, status.
 
-    Handles both 11-column (original) and 12-column (budget+actual) schemas.
+    Handles 13-column (kit schema), 12-column (budget+actual), and
+    11-column (original) schemas. 13-col is primary; 11/12-col are
+    legacy read-only compatibility for older live CSV data.
     """
     n = len(row)
-    if n >= 12:
+    if n >= 13:
+        # 13-col: [ts, task, agent, model, cat, pri, budget_npt, cost_npt, cost_usd_derived, turns, dur, denials, status]
+        return {
+            "timestamp": row[0],
+            "task_id": row[1],
+            "worker_id": row[2],
+            "model": row[3],
+            "category": row[4],
+            "priority": row[5],
+            "cost_usd": parse_cost(row[8]),
+            "turns": row[9],
+            "duration_s": parse_duration(row[10]),
+            "status": row[12],
+        }
+    elif n >= 12:
         # 12-col: [ts, task, worker, model, cat, pri, budget_npt, cost_usd, turns, dur, denials, status]
         return {
             "timestamp": row[0],
