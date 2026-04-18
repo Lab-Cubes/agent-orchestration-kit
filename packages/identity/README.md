@@ -70,8 +70,8 @@ const b = new DevIdentityProvider(ca, { agentId: "b" });
   `DevCA` CLI + keypair persistence.
 - **Not interop-complete with other NPS SDKs.** The codec's `canonicalize()`
   is RFC 8785–inspired but not strictly compliant; signatures produced by
-  dev mode are byte-stable within this kit but may not verify under Ori's
-  TypeScript SDK until v0.2.0 upgrades to a full JCS implementation.
+  dev mode are byte-stable within this kit but may not verify under the
+  canonical NPS TypeScript SDK until v0.2.0 upgrades to a full JCS implementation.
 
 ## License
 
