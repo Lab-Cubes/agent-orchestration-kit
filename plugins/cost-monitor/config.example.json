@@ -1,0 +1,7 @@
+{
+  "$comment": "Copy to config.json and edit. All fields optional — zero-config works with defaults.",
+
+  "npt_usd_rate": 0.001,
+
+  "log_path": ""
+}

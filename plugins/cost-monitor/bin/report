@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+"""
+cost-monitor report — parse dispatch-costs.csv and print a cost summary.
+
+Usage:
+    bin/report [--log PATH] [--rate RATE]
+
+Options:
+    --log PATH    Path to dispatch-costs.csv (overrides config.json log_path)
+    --rate RATE   NPT→USD conversion rate (overrides config.json npt_usd_rate)
+"""
+
+import csv
+import json
+import os
+import sys
+from collections import defaultdict
+from datetime import date, datetime, timezone
+from pathlib import Path
+
+
+def find_config():
+    plugin_dir = Path(__file__).resolve().parent.parent
+    config_path = plugin_dir / "config.json"
+    if config_path.exists():
+        try:
+            return json.loads(config_path.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def default_log_path():
+    # plugins/cost-monitor/  →  ../../nop/logs/dispatch-costs.csv
+    plugin_dir = Path(__file__).resolve().parent.parent
+    return plugin_dir / ".." / ".." / "nop" / "logs" / "dispatch-costs.csv"
+
+
+def parse_cost(value):
+    """Strip leading $ and parse as float; return 0.0 on failure."""
+    try:
+        return float(str(value).lstrip("$").strip())
+    except (ValueError, AttributeError):
+        return 0.0
+
+
+def parse_duration(value):
+    """Parse duration in seconds; return None on failure."""
+    try:
+        return float(str(value).strip())
+    except (ValueError, AttributeError):
+        return None
+
+
+def parse_row(row):
+    """
+    Normalize a CSV row to a dict with keys:
+    timestamp, task_id, worker_id, model, category, priority,
+    cost_usd, turns, duration_s, status.
+
+    Handles both 11-column (original) and 12-column (budget+actual) schemas.
+    """
+    n = len(row)
+    if n >= 12:
+        # 12-col: [ts, task, worker, model, cat, pri, budget_npt, cost_usd, turns, dur, denials, status]
+        return {
+            "timestamp": row[0],
+            "task_id": row[1],
+            "worker_id": row[2],
+            "model": row[3],
+            "category": row[4],
+            "priority": row[5],
+            "cost_usd": parse_cost(row[7]),
+            "turns": row[8],
+            "duration_s": parse_duration(row[9]),
+            "status": row[11],
+        }
+    elif n >= 11:
+        # 11-col: [ts, task, worker, model, cat, pri, cost_usd, turns, dur, denials, status]
+        return {
+            "timestamp": row[0],
+            "task_id": row[1],
+            "worker_id": row[2],
+            "model": row[3],
+            "category": row[4],
+            "priority": row[5],
+            "cost_usd": parse_cost(row[6]),
+            "turns": row[7],
+            "duration_s": parse_duration(row[8]),
+            "status": row[10],
+        }
+    return None
+
+
+def load_csv(path):
+    rows = []
+    try:
+        with open(path, newline="") as f:
+            reader = csv.reader(f)
+            for i, raw in enumerate(reader):
+                if i == 0:
+                    continue  # skip header
+                row = parse_row(raw)
+                if row:
+                    rows.append(row)
+    except FileNotFoundError:
+        print(f"Error: log file not found: {path}", file=sys.stderr)
+        sys.exit(1)
+    return rows
+
+
+def today_str():
+    return date.today().isoformat()
+
+
+def fmt_usd(value):
+    return f"${value:.4f}"
+
+
+def fmt_dur(seconds):
+    if seconds is None:
+        return "-"
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    return f"{int(seconds // 60)}m{int(seconds % 60)}s"
+
+
+def main():
+    args = sys.argv[1:]
+    config = find_config()
+
+    log_path = None
+    npt_usd_rate = None
+
+    i = 0
+    while i < len(args):
+        if args[i] == "--log" and i + 1 < len(args):
+            log_path = args[i + 1]
+            i += 2
+        elif args[i] == "--rate" and i + 1 < len(args):
+            npt_usd_rate = float(args[i + 1])
+            i += 2
+        else:
+            i += 1
+
+    if log_path is None:
+        log_path = config.get("log_path") or default_log_path()
+    if npt_usd_rate is None:
+        npt_usd_rate = float(config.get("npt_usd_rate", 0.001))
+
+    log_path = Path(log_path).resolve()
+    rows = load_csv(log_path)
+
+    today = today_str()
+    today_rows = [r for r in rows if r["timestamp"].startswith(today)]
+
+    total_cost = sum(r["cost_usd"] for r in rows)
+    today_cost = sum(r["cost_usd"] for r in today_rows)
+
+    # ── Totals ──────────────────────────────────────────────────────────────
+    print(f"\n{'─'*60}")
+    print(f"  Cost Monitor Report — {today}")
+    print(f"{'─'*60}")
+    print(f"  All-time  {len(rows):>4} tasks   {fmt_usd(total_cost)}")
+    print(f"  Today     {len(today_rows):>4} tasks   {fmt_usd(today_cost)}")
+    if npt_usd_rate:
+        total_npt = total_cost / npt_usd_rate
+        today_npt = today_cost / npt_usd_rate
+        print(f"  All-time  {total_npt:>9.1f} NPT  (at ${npt_usd_rate}/NPT)")
+        print(f"  Today     {today_npt:>9.1f} NPT")
+
+    # ── By agent ─────────────────────────────────────────────────────────────
+    by_agent = defaultdict(lambda: {"tasks": 0, "cost": 0.0})
+    for r in rows:
+        a = by_agent[r["worker_id"]]
+        a["tasks"] += 1
+        a["cost"] += r["cost_usd"]
+
+    sorted_agents = sorted(by_agent.items(), key=lambda x: x[1]["cost"], reverse=True)
+    print("\nBy agent (all-time)")
+    print("─" * 60)
+    print(f"  {'Agent':<20}  {'Tasks':>5}  {'Cost USD':>10}  {'Avg/task':>10}")
+    print(f"  {'─'*20}  {'─'*5}  {'─'*10}  {'─'*10}")
+    for agent_id, stats in sorted_agents:
+        avg = stats["cost"] / stats["tasks"] if stats["tasks"] else 0
+        print(f"  {agent_id:<20}  {stats['tasks']:>5}  {fmt_usd(stats['cost']):>10}  {fmt_usd(avg):>10}")
+
+    # ── By category ──────────────────────────────────────────────────────────
+    by_cat = defaultdict(lambda: {"tasks": 0, "cost": 0.0})
+    for r in rows:
+        c = by_cat[r["category"]]
+        c["tasks"] += 1
+        c["cost"] += r["cost_usd"]
+
+    sorted_cats = sorted(by_cat.items(), key=lambda x: x[1]["cost"], reverse=True)
+    print("\nBy category (all-time)")
+    print("─" * 60)
+    print(f"  {'Category':<20}  {'Tasks':>5}  {'Cost USD':>10}  {'Avg/task':>10}")
+    print(f"  {'─'*20}  {'─'*5}  {'─'*10}  {'─'*10}")
+    for cat, stats in sorted_cats:
+        avg = stats["cost"] / stats["tasks"] if stats["tasks"] else 0
+        print(f"  {cat:<20}  {stats['tasks']:>5}  {fmt_usd(stats['cost']):>10}  {fmt_usd(avg):>10}")
+
+    # ── Today by agent ───────────────────────────────────────────────────────
+    if today_rows:
+        by_agent_today = defaultdict(lambda: {"tasks": 0, "cost": 0.0})
+        for r in today_rows:
+            a = by_agent_today[r["worker_id"]]
+            a["tasks"] += 1
+            a["cost"] += r["cost_usd"]
+
+        sorted_today = sorted(by_agent_today.items(), key=lambda x: x[1]["cost"], reverse=True)
+        print("\nBy agent (today)")
+        print("─" * 60)
+        print(f"  {'Agent':<20}  {'Tasks':>5}  {'Cost USD':>10}")
+        print(f"  {'─'*20}  {'─'*5}  {'─'*10}")
+        for agent_id, stats in sorted_today:
+            print(f"  {agent_id:<20}  {stats['tasks']:>5}  {fmt_usd(stats['cost']):>10}")
+
+    # ── Top-5 most expensive tasks ────────────────────────────────────────────
+    top5 = sorted(rows, key=lambda r: r["cost_usd"], reverse=True)[:5]
+    print("\nTop 5 most expensive tasks")
+    print("─" * 60)
+    print(f"  {'Task ID':<42}  {'Worker':<15}  {'Cost':>10}  {'Dur':>6}  {'Cat'}")
+    print(f"  {'─'*42}  {'─'*15}  {'─'*10}  {'─'*6}  {'─'*10}")
+    for r in top5:
+        print(
+            f"  {r['task_id']:<42}  {r['worker_id']:<15}  "
+            f"{fmt_usd(r['cost_usd']):>10}  {fmt_dur(r['duration_s']):>6}  {r['category']}"
+        )
+
+    print()
+
+
+if __name__ == "__main__":
+    main()
