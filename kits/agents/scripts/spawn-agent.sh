@@ -417,10 +417,10 @@ PYEOF
         # NPT approximation for v0.1.0: input + output + cache_read tokens.
         # Full NPS-0 §4.3 token-budget.md implementation lands in v0.2.0.
         local parse_out
-        parse_out=$(echo "$clean_json" | python3 - <<'PYEOF' 2>/dev/null || true
-import json, sys
+        parse_out=$(CLEAN_JSON="$clean_json" python3 - <<'PYEOF' 2>/dev/null || true
+import json, os, sys
 try:
-    d = json.loads(sys.stdin.read())
+    d = json.loads(os.environ['CLEAN_JSON'])
 except json.JSONDecodeError:
     sys.exit(1)
 usage = d.get('usage') or {}
