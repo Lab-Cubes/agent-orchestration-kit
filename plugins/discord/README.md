@@ -1,12 +1,18 @@
 # @nps-kit/plugin-discord
 
-Discord notification plugin for [`@nps-kit/agents`](../../kits/agents/). Posts
-worker lifecycle events (claimed, completed, failed) to a Discord channel via
-per-worker bot accounts.
+Standalone Discord notification plugin for nps-kit agents. Works with any
+Discord bot token — no external services or special infrastructure required.
+Posts worker lifecycle events (claimed, completed, failed) to a Discord channel
+via per-worker bot accounts.
 
-Works with any NPS-kit agents install. Zero coupling to the core kit — installs
-three hook scripts into `kits/agents/hooks/`, reads its own config, runs only
-when events fire. Uninstall is `rm` the hook files.
+Zero coupling to the core kit — installs three hook scripts into
+`kits/agents/hooks/`, reads its own config, runs only when events fire. Uninstall
+is `rm` the hook files.
+
+**Optional convenience:** if you already store bot tokens in an `openclaw.json`
+file, set `token_from_openclaw` to read tokens from there and avoid duplicating
+secrets. This is entirely optional — the plugin works standalone with tokens
+in `config.json`.
 
 ## Quick start
 
