@@ -138,3 +138,32 @@ teardown() {
     run "$MOCK_PLUGIN_DIR/install.sh" --uninstall
     [ "$status" -eq 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# Symlink: install creates config.json symlink; uninstall removes it
+# ---------------------------------------------------------------------------
+
+@test "install creates config.json symlink in hooks dir pointing at plugin config" {
+    run "$MOCK_PLUGIN_DIR/install.sh"
+    [ "$status" -eq 0 ]
+
+    # Must be a symlink (not a plain file copy)
+    [ -L "$MOCK_KIT_HOOKS/config.json" ]
+
+    # Must resolve to the plugin's config.json
+    resolved="$(readlink "$MOCK_KIT_HOOKS/config.json")"
+    [ "$resolved" = "$MOCK_PLUGIN_DIR/config.json" ]
+}
+
+@test "uninstall removes config.json symlink but preserves source config.json" {
+    "$MOCK_PLUGIN_DIR/install.sh" > /dev/null
+
+    run "$MOCK_PLUGIN_DIR/install.sh" --uninstall
+    [ "$status" -eq 0 ]
+
+    # Symlink must be gone from hooks dir
+    [ ! -e "$MOCK_KIT_HOOKS/config.json" ]
+
+    # Source config.json in plugin dir must still exist
+    [ -f "$MOCK_PLUGIN_DIR/config.json" ]
+}

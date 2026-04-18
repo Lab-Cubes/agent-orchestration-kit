@@ -31,6 +31,10 @@ if [[ "${1:-}" == "--uninstall" ]]; then
             say "Removed $hook"
         fi
     done
+    if [[ -L "$KIT_HOOKS_DIR/config.json" ]]; then
+        rm -f "$KIT_HOOKS_DIR/config.json"
+        say "Removed config.json symlink"
+    fi
     say "Uninstalled. config.json preserved at $PLUGIN_DIR/config.json"
     exit 0
 fi
@@ -46,6 +50,9 @@ for hook in "${HOOKS[@]}"; do
     cp "$PLUGIN_DIR/$hook" "$KIT_HOOKS_DIR/$hook"
     chmod +x "$KIT_HOOKS_DIR/$hook"
 done
+
+ln -sf "$PLUGIN_DIR/config.json" "$KIT_HOOKS_DIR/config.json"
+say "Linked config.json into $KIT_HOOKS_DIR/"
 
 say "Installed ${#HOOKS[@]} hooks into $KIT_HOOKS_DIR/"
 say "Next worker dispatch will post to Discord."
