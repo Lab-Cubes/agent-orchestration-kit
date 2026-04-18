@@ -13,9 +13,9 @@ EVENT="${1:-}"
 PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 [[ ! -f "$PLUGIN_DIR/config.json" ]] && exit 0
 
-# Load config + format message in one Python call.
-# Config path and all substitution values are passed as argv — no shell interpolation
-# into Python source (injection hardening, same pattern as spawn-agent.sh@238700d).
+# Resolve account, token, and format message in one Python call.
+# Config path and all substitution values pass as argv — no shell interpolation
+# into Python source (injection hardening, same pattern as spawn-agent.sh).
 while IFS='=' read -r _key _rest; do
     [[ -z "$_key" ]] && continue
     declare "$_key"="$_rest"
@@ -26,16 +26,47 @@ done < <(python3 - \
     "${NPS_TASK_ID:-unknown}" \
     "${NPS_COST_NPT:-0}" \
 <<'PYEOF'
-import json, sys
+import json, sys, os
 
 config_path, event, agent_id, task_id, cost_npt = sys.argv[1:]
 d = json.load(open(config_path))
 
 channel = d.get('channel_id', '')
-token   = d.get('bot_token', '')
 
-accounts = d.get('accounts', {})
-account  = accounts.get(agent_id, accounts.get('default', agent_id or 'agent'))
+# Resolve account name: worker_map[agent_id] → account_name, fallback 'default'
+worker_map   = d.get('worker_map', {})
+account_name = worker_map.get(agent_id, 'default')
+
+# Resolve display name from accounts block
+accounts     = d.get('accounts', {})
+account_data = accounts.get(account_name) or accounts.get('default') or {}
+if isinstance(account_data, str):
+    # Legacy schema compat: accounts was {worker_id: display_name}
+    display_name = account_data
+    token = ''
+else:
+    display_name = account_data.get('display_name', account_name)
+    token        = account_data.get('token', '')
+
+# token_from_openclaw: read token from openclaw.json at runtime if configured
+openclaw_path = d.get('token_from_openclaw', '')
+if not token and openclaw_path and os.path.exists(openclaw_path):
+    try:
+        ocd = json.load(open(openclaw_path))
+        token = (ocd.get('channels', {})
+                    .get('discord', {})
+                    .get('accounts', {})
+                    .get(account_name, {})
+                    .get('token', ''))
+        # Fall back to 'default' account token if named account not found
+        if not token:
+            token = (ocd.get('channels', {})
+                        .get('discord', {})
+                        .get('accounts', {})
+                        .get('default', {})
+                        .get('token', ''))
+    except (json.JSONDecodeError, OSError):
+        pass
 
 defaults = {
     'task_claimed':   '\U0001f528 {account} claimed {task_id}',
@@ -43,7 +74,7 @@ defaults = {
     'task_failed':    '\u274c {account} failed {task_id}',
 }
 template = d.get('messages', {}).get(event, defaults.get(event, '{account} {event} {task_id}'))
-message  = template.format(account=account, task_id=task_id, cost_npt=cost_npt, event=event)
+message  = template.format(account=display_name, task_id=task_id, cost_npt=cost_npt, event=event)
 
 print(f'CHANNEL={channel}')
 print(f'TOKEN={token}')

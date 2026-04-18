@@ -1,18 +1,36 @@
 {
-  "$comment": "Copy to config.json and fill in real values. Empty channel_id or bot_token = messages suppressed (safe fallback).",
+  "$comment": "Copy to config.json and fill in real values. Empty tokens or missing channel_id = messages suppressed (safe fallback).",
 
   "channel_id": "",
-  "bot_token":  "",
+  "$comment_channel": "Discord channel ID where all worker events are posted. Get via Discord client → right-click channel → Copy Channel ID (Developer Mode required).",
 
   "accounts": {
-    "$comment": "Optional: map worker IDs to display names shown in Discord messages.",
-    "default": "agent"
+    "$comment": "Per-account config. Each entry maps an account name to a Discord bot token and display name used in messages. Add one entry per Discord bot you have.",
+    "default":      { "token": "", "display_name": "agent" },
+    "orchestrator": { "token": "", "display_name": "orchestrator" },
+    "coder1":       { "token": "", "display_name": "coder-01" },
+    "coder2":       { "token": "", "display_name": "coder-02" },
+    "critic":       { "token": "", "display_name": "critic" },
+    "researcher":   { "token": "", "display_name": "researcher" }
   },
+
+  "worker_map": {
+    "$comment": "Maps NOP worker IDs to account names in the accounts block. Workers not listed fall back to 'default'.",
+    "coder-01":     "coder1",
+    "coder-02":     "coder2",
+    "critic-01":    "critic",
+    "researcher-01":"researcher",
+    "sage":         "orchestrator",
+    "dispatcher":   "orchestrator"
+  },
+
+  "token_from_openclaw": "",
+  "$comment_token_from_openclaw": "Path to an openclaw.json file. When set, tokens are read from channels.discord.accounts.{account_name}.token in that file instead of the accounts block above. Avoids duplicating secrets. Example: '/home/user/.openclaw/openclaw.json'.",
 
   "messages": {
     "$comment": "Optional: override message templates. {account}, {task_id}, {cost_npt} are substituted.",
-    "task_claimed":   "\ud83d\udd28 {account} claimed {task_id}",
-    "task_completed": "\u2705 {account} completed {task_id} ({cost_npt} NPT)",
-    "task_failed":    "\u274c {account} failed {task_id}"
+    "task_claimed":   "🔨 {account} claimed {task_id}",
+    "task_completed": "✅ {account} completed {task_id} ({cost_npt} NPT)",
+    "task_failed":    "❌ {account} failed {task_id}"
   }
 }

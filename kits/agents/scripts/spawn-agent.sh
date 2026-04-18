@@ -65,7 +65,7 @@ print(f"ISSUER={d.get('issuer_agent_id', 'operator')}")
 print(f"DEFAULT_MODEL={d.get('default_model', 'sonnet')}")
 print(f"DEFAULT_TIME_LIMIT={d.get('default_time_limit_s', 900)}")
 print(f"DEFAULT_MAX_TURNS={d.get('default_max_turns', 100)}")
-print(f"DEFAULT_BUDGET_NPT={d.get('default_budget_npt', 20000)}")
+print(f"DEFAULT_BUDGET_NPT={d.get('default_budget_npt', 40000)}")
 PYEOF
 )
 fi
@@ -357,12 +357,27 @@ PYEOF
     fi
 
     # Claude CLI's --max-budget-usd is the closest available kill-switch; we derive
-    # an approximate USD ceiling from the NPT budget. Rough: 1000 NPT ≈ $0.005
-    # on Sonnet. Over-generous rather than blocking legitimate work.
+    # a USD ceiling from the NPT budget. Priority:
+    #   1. category_usd_cap from config (exact policy ceiling per category)
+    #   2. budget_npt * model_rates[model].npt_usd (NPT-derived, model-calibrated)
+    #   3. fallback: budget_npt * 0.000025 (Sonnet default)
+    # Rates: config.model_rates[model].npt_usd (Sonnet: $0.000025/NPT = $1.00/40K NPT).
     local budget_usd_derived
-    budget_usd_derived=$(python3 - "$budget" <<'PYEOF'
-import sys
-print(max(0.50, int(sys.argv[1]) * 0.00001))
+    budget_usd_derived=$(python3 - "$budget" "$CONFIG_FILE" "$model" "$category" <<'PYEOF'
+import json, sys, os
+budget_npt, config_file, model, category = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+
+if config_file and os.path.exists(config_file):
+    d = json.load(open(config_file))
+    cap = d.get('category_usd_cap', {}).get(category)
+    if cap is not None:
+        print(max(0.50, float(cap)))
+        sys.exit(0)
+    rate = d.get('model_rates', {}).get(model, {}).get('npt_usd', 0.000025)
+    overhead = d.get('nop_overhead_usd', 0.0)
+    print(max(0.50, budget_npt * rate + overhead))
+else:
+    print(max(0.50, budget_npt * 0.000025))
 PYEOF
 )
 

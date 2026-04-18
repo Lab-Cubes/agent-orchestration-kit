@@ -12,16 +12,55 @@
     "nop:execute"
   ],
 
-  "default_budget_npt": 20000,
-  "$comment_budget": "Default per-task NPT cap. NPT = NPS Token (cross-model standardized unit, NPS-0 \u00a74.3). Override per-dispatch via --budget.",
+  "default_budget_npt": 40000,
+  "$comment_budget": "Default per-task NPT cap. NPT = NPS Token (cross-model standardized unit, NPS-0 §4.3). Override per-dispatch via --budget. Calibrated for Sonnet; see model_rates below.",
 
   "category_budget_npt": {
-    "code":     30000,
-    "docs":     40000,
+    "$comment": "Per-category NPT caps. At Sonnet npt_usd rate ($0.000025/NPT), these derive to the USD targets in category_usd_cap below.",
+    "code":     40000,
+    "docs":     60000,
     "test":     30000,
     "research": 60000,
-    "refactor": 40000,
-    "ops":      30000
+    "refactor": 60000,
+    "ops":      40000
+  },
+
+  "category_usd_cap": {
+    "$comment": "USD ceiling per task category. Takes precedence over the NPT-derived ceiling in dispatch. Set to match your actual budget policy. Includes the nop_overhead_usd dispatch cost.",
+    "code":     1.00,
+    "docs":     1.50,
+    "test":     0.75,
+    "research": 2.00,
+    "refactor": 1.50,
+    "ops":      1.00
+  },
+
+  "nop_overhead_usd": 0.10,
+  "$comment_overhead": "Estimated USD cost of the dispatch scaffolding itself (worktree creation, Claude Code startup, intent/result I/O). Added to the category_usd_cap budget for the --max-budget-usd ceiling when category_usd_cap is not set.",
+
+  "model_rates": {
+    "$comment": "Actual API rates per model, per token channel (MTok = 1 million tokens). Used for accurate post-hoc NPT cost reporting (NPS-0 §4.3). npt_usd is the NPT-to-USD multiplier used to derive --max-budget-usd when no category_usd_cap is set.",
+    "sonnet": {
+      "input_usd_per_mtok":      3.00,
+      "output_usd_per_mtok":    15.00,
+      "cache_read_usd_per_mtok": 0.30,
+      "npt_usd": 0.000025,
+      "$comment": "Sonnet calibration: 40K NPT → $1.00, 60K NPT → $1.50 (code/docs/refactor/ops). research uses category_usd_cap ($2.00) because research tasks are output-heavy and exceed the base rate."
+    },
+    "haiku": {
+      "input_usd_per_mtok":      0.80,
+      "output_usd_per_mtok":     4.00,
+      "cache_read_usd_per_mtok": 0.08,
+      "npt_usd": 0.000005,
+      "$comment": "Haiku calibration: 40K NPT → $0.20, 60K NPT → $0.30. Well within typical task ceilings."
+    },
+    "opus": {
+      "input_usd_per_mtok":     15.00,
+      "output_usd_per_mtok":    75.00,
+      "cache_read_usd_per_mtok": 1.50,
+      "npt_usd": 0.000125,
+      "$comment": "Opus calibration: 40K NPT → $5.00. Opus tasks should use explicit --budget overrides."
+    }
   },
 
   "default_model": "sonnet",

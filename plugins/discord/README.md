@@ -2,7 +2,7 @@
 
 Discord notification plugin for [`@nps-kit/agents`](../../kits/agents/). Posts
 worker lifecycle events (claimed, completed, failed) to a Discord channel via
-a bot account.
+per-worker bot accounts.
 
 Works with any NPS-kit agents install. Zero coupling to the core kit — installs
 three hook scripts into `kits/agents/hooks/`, reads its own config, runs only
@@ -13,7 +13,7 @@ when events fire. Uninstall is `rm` the hook files.
 ```bash
 cd plugins/discord
 cp config.example.json config.json
-$EDITOR config.json            # fill in channel ID + bot token
+$EDITOR config.json            # fill in channel_id + account tokens
 ./install.sh
 ```
 
@@ -24,22 +24,55 @@ Next agent dispatch will post to Discord.
 ```json
 {
   "channel_id": "123456789012345678",
-  "bot_token":  "your-discord-bot-token",
+
   "accounts": {
-    "coder-01":      "coder1",
-    "coder-02":      "coder2",
-    "critic-01":     "critic",
-    "researcher-01": "research",
-    "default":       "agent"
+    "default":      { "token": "Bot token for fallback account", "display_name": "agent" },
+    "coder1":       { "token": "Bot token for coder-01 bot",     "display_name": "coder-01" },
+    "coder2":       { "token": "Bot token for coder-02 bot",     "display_name": "coder-02" },
+    "critic":       { "token": "Bot token for critic bot",       "display_name": "critic" },
+    "researcher":   { "token": "Bot token for researcher bot",   "display_name": "researcher" },
+    "orchestrator": { "token": "Bot token for orchestrator bot", "display_name": "orchestrator" }
+  },
+
+  "worker_map": {
+    "coder-01":     "coder1",
+    "coder-02":     "coder2",
+    "critic-01":    "critic",
+    "researcher-01":"researcher",
+    "sage":         "orchestrator",
+    "dispatcher":   "orchestrator"
   }
 }
 ```
 
 | Field | Meaning |
 |-------|---------|
-| `channel_id` | Discord channel where messages post. Get from Discord client → right-click channel → Copy ID (Developer Mode) |
-| `bot_token`  | Your Discord bot's auth token. Create a bot at https://discord.com/developers/applications |
-| `accounts`   | Optional per-agent display name map. Default used when worker ID isn't listed |
+| `channel_id` | Discord channel where messages post. Get from Discord client → right-click channel → Copy Channel ID (Developer Mode) |
+| `accounts` | Map of account name → `{ token, display_name }`. Each account is a separate Discord bot. `default` is the fallback when no worker_map entry matches |
+| `worker_map` | Map of NOP worker ID → account name. Workers not listed fall back to `default` |
+
+### Token from openclaw.json (avoid duplicating secrets)
+
+If you already store bot tokens in `openclaw.json`, set `token_from_openclaw` instead of
+copying tokens into `config.json`:
+
+```json
+{
+  "channel_id": "123456789012345678",
+  "token_from_openclaw": "/path/to/openclaw.json",
+  "worker_map": {
+    "coder-01":     "coder1",
+    "coder-02":     "coder2",
+    "critic-01":    "critic",
+    "researcher-01":"researcher",
+    "sage":         "orchestrator"
+  }
+}
+```
+
+Tokens are read at runtime from `channels.discord.accounts.{account_name}.token` in the
+openclaw.json file. Worker display names still come from `accounts[account_name].display_name`
+if set, or fall back to the account name.
 
 ## Events
 
@@ -49,7 +82,7 @@ Next agent dispatch will post to Discord.
 | `task-completed` | `✅ {account} completed {task_id} ({cost_npt} NPT)` |
 | `task-failed`    | `❌ {account} failed {task_id}` |
 
-All messages suppressed if `channel_id` or `bot_token` are empty — safe fallback.
+All messages suppressed if `channel_id` is empty or no token can be resolved — safe fallback.
 
 ## Uninstall
 
