@@ -1,7 +1,7 @@
 {
   "name": "@nps-kit/agents",
   "version": "0.1.0",
-  "description": "NOP (Neural Orchestration Protocol) reference kit — mailbox-based multi-agent orchestration per NPS-5. Wraps any Claude Code (or any agent runtime) with a portable task-dispatch protocol.",
+  "description": "NOP (Neural Orchestration Protocol) reference kit — mailbox-based multi-agent orchestration per NPS-5. Wraps any AI agent runtime (reference impl uses Claude Code CLI) with a portable task-dispatch protocol.",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",

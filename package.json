@@ -2,7 +2,7 @@
   "name": "nps-kit",
   "private": true,
   "version": "0.1.0",
-  "description": "Reference implementation and adapter kit for NPS (Neural Protocol Suite).",
+  "description": "Agent orchestration kit — NOP reference implementation for multi-agent task dispatch. Part of the NPS (Neural Protocol Suite) ecosystem; protocol SDKs live at labacacia.",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=22"
