@@ -1,6 +1,7 @@
 # Runtime state — never commit
 .env
 config.json
+.nps-installed
 agents/
 worktrees/
 logs/
