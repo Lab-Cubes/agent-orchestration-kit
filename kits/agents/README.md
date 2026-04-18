@@ -1,19 +1,21 @@
 # @nps-kit/agents — NOP Orchestration, Clone and Run
 
-> We use this to dispatch coder/critic/researcher agents to Claude Code every
-> day. It saves us tokens and makes multi-agent work tractable. Try it.
+> We use this to dispatch coder/critic/researcher agents every day. It saves
+> us tokens and makes multi-agent work tractable. Try it.
 
 **What it is:** a reference implementation of [NPS-5 NOP](https://github.com/labacacia/NPS-Release)
-that wraps any Claude Code instance as a mailbox-based worker. One orchestrator,
+that wraps an AI agent runtime as a mailbox-based worker. One orchestrator,
 many workers, file-based task dispatch, git worktree isolation per task.
+The reference dispatcher invokes the `claude` CLI; to port to another runtime,
+see [§11 of the implementation spec](./docs/implementation-spec.md#11-runtime-specific-touchpoints).
 
 **Why use it:**
 - **Token savings.** Workers read context from their local scope. Orchestrators
   don't have to stuff the whole context into a prompt — they write a small intent
   message. See `bin/demo` for a live NPT comparison on your machine.
-- **Runtime-agnostic.** The mailbox protocol works with any agent runtime that
-  can read a file and write a result. This kit ships a Claude Code wrapper;
-  the same pattern wraps OpenClaw, LangChain, CrewAI, or your own runtime.
+- **Runtime-agnostic protocol.** The mailbox protocol works with any agent runtime
+  that can read a file and write a result. This kit ships a reference wrapper for
+  Claude Code CLI; the same pattern wraps any other runtime.
 - **Git worktree isolation.** Each task runs on its own branch in a dedicated
   worktree. Parallel workers don't conflict. Squash-merge when the work is good.
 - **Hook-based extensibility.** Notifications, metrics, custom behaviour plug
@@ -32,8 +34,10 @@ That's it. `bin/setup` creates your runtime directories and three default
 workers. `bin/demo` runs a canonical task two ways (naive vs NOP) and shows
 NPT saved on your machine.
 
-**Prerequisites:** Node 22+, pnpm 10+, [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code),
-Python 3 (for JSON processing in shell).
+**Prerequisites:** Node 22+, pnpm 10+, git, Python 3 (for JSON processing in shell),
+and an AI agent CLI. The reference implementation uses
+[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code);
+adopters can replace the wrapper with any runtime's equivalent.
 
 ## How it works
 
@@ -44,7 +48,7 @@ Orchestrator (you, or your own agent)
     │                         │
     │                         ├─ mv ──→ active/   (worker claims)
     │                         │           │
-    │                         │           ├─ execute (Claude Code runs)
+    │                         │           ├─ execute (agent runtime runs)
     │                         │           │
     │                         ├─ mv ──→ done/     (intent archived)
     │                         │           │
@@ -104,7 +108,7 @@ Discord plugin: `cd ../../plugins/discord && ./install.sh`.
 
 ## Cost
 
-Runs on your Claude Code subscription — no API keys managed by this kit.
+Runs on your runtime subscription — no API keys managed by this kit.
 NPT budgets cap per-task spend (NPS-0 §4.3 standardized unit, approximated as
 input + output + cache_read tokens for v0.1.0; full NPS-0 §4.3 normalization
 across model tiers arrives in v0.2.0).
