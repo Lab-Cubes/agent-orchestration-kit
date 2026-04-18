@@ -41,3 +41,4 @@ export {
   buildFrame,
   parseFrame,
 } from "./codec.js";
+export { canonicalize, canonicalizeToBytes } from "./canonicalize.js";
