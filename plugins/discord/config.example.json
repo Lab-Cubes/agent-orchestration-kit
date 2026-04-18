@@ -1,0 +1,18 @@
+{
+  "$comment": "Copy to config.json and fill in real values. Empty channel_id or bot_token = messages suppressed (safe fallback).",
+
+  "channel_id": "",
+  "bot_token":  "",
+
+  "accounts": {
+    "$comment": "Optional: map worker IDs to display names shown in Discord messages.",
+    "default": "agent"
+  },
+
+  "messages": {
+    "$comment": "Optional: override message templates. {account}, {task_id}, {cost_npt} are substituted.",
+    "task_claimed":   "\ud83d\udd28 {account} claimed {task_id}",
+    "task_completed": "\u2705 {account} completed {task_id} ({cost_npt} NPT)",
+    "task_failed":    "\u274c {account} failed {task_id}"
+  }
+}
