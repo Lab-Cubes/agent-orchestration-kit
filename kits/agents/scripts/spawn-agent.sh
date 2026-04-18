@@ -40,26 +40,34 @@ HOOKS_DIR="$NPS_DIR/hooks"
 PERSONAS_DIR="$NPS_DIR/templates/personas"
 
 # --- Config (from config.json if present, else defaults) ---
+# Defaults here; overridden below if config.json exists. Using env vars read
+# by Python (not string interpolation into Python source) avoids injection
+# if config path or values contain shell or Python metacharacters.
 CONFIG_FILE="$NPS_DIR/config.json"
+ISSUER_DOMAIN="dev.localhost"
+ISSUER="operator"
+DEFAULT_MODEL="sonnet"
+DEFAULT_TIME_LIMIT=900
+DEFAULT_MAX_TURNS=100
+DEFAULT_BUDGET_NPT=20000
+
 if [[ -f "$CONFIG_FILE" ]]; then
-    eval "$(python3 -c "
-import json
-d = json.load(open('$CONFIG_FILE'))
-def q(s): return str(s).replace(\"'\", \"'\\\\''\")
-print(f\"ISSUER_DOMAIN='{q(d.get('issuer_domain', 'dev.localhost'))}'\")
-print(f\"ISSUER='{q(d.get('issuer_agent_id', 'operator'))}'\")
-print(f\"DEFAULT_MODEL='{q(d.get('default_model', 'sonnet'))}'\")
-print(f\"DEFAULT_TIME_LIMIT={d.get('default_time_limit_s', 900)}\")
-print(f\"DEFAULT_MAX_TURNS={d.get('default_max_turns', 100)}\")
-print(f\"DEFAULT_BUDGET_NPT={d.get('default_budget_npt', 20000)}\")
-")"
-else
-    ISSUER_DOMAIN="dev.localhost"
-    ISSUER="operator"
-    DEFAULT_MODEL="sonnet"
-    DEFAULT_TIME_LIMIT=900
-    DEFAULT_MAX_TURNS=100
-    DEFAULT_BUDGET_NPT=20000
+    # Python reads the config path from argv and emits one KEY=value per line.
+    # Bash reads back via a safe while loop, no eval.
+    while IFS='=' read -r key value; do
+        [[ -z "$key" ]] && continue
+        declare "$key"="$value"
+    done < <(python3 - "$CONFIG_FILE" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(f"ISSUER_DOMAIN={d.get('issuer_domain', 'dev.localhost')}")
+print(f"ISSUER={d.get('issuer_agent_id', 'operator')}")
+print(f"DEFAULT_MODEL={d.get('default_model', 'sonnet')}")
+print(f"DEFAULT_TIME_LIMIT={d.get('default_time_limit_s', 900)}")
+print(f"DEFAULT_MAX_TURNS={d.get('default_max_turns', 100)}")
+print(f"DEFAULT_BUDGET_NPT={d.get('default_budget_npt', 20000)}")
+PYEOF
+)
 fi
 
 # --- Colours ---
@@ -109,51 +117,57 @@ cmd_setup() {
 
     mkdir -p "$agent_dir"/{inbox,active,done,blocked,.claude}
 
-    # Parse persona values + sections
-    local model capabilities default_scope tools_section agent_instructions run_mode
-    eval "$(python3 -c "
-import re
-content = open('$persona_file').read()
+    # One Python pass: read persona + template from argv, do all substitutions,
+    # write the assembled CLAUDE.md. Fixes (a) sed -i '' macOS-only issue and
+    # (b) every Python-string-interpolation injection by passing all values
+    # through argv (never parsed as Python code).
+    local assembled="$agent_dir/CLAUDE.md"
+    python3 - \
+        "$persona_file" "$TEMPLATE" "$assembled" \
+        "$agent_id" "$agent_type" \
+        "${DEFAULT_MODEL}" "$ISSUER_DOMAIN" "$ISSUER" \
+        <<'PYEOF'
+import re, sys
+persona_file, template_file, out_file, agent_id, agent_type, default_model, issuer_domain, issuer = sys.argv[1:]
+
+persona = open(persona_file).read()
+
 def kv(key):
-    m = re.search(r'^' + key + r':\s*(.+)', content, re.M)
+    m = re.search(r'^' + key + r':\s*(.+)', persona, re.M)
     return m.group(1).strip() if m else ''
+
 def section(name):
     pattern = r'^## ' + re.escape(name) + r'\n(.*?)(?=^## |\Z)'
-    m = re.search(pattern, content, re.M | re.S)
+    m = re.search(pattern, persona, re.M | re.S)
     return m.group(1).strip() if m else ''
-def q(s): return s.replace(\"'\", \"'\\\\''\" )
-print(f\"model='{q(kv('MODEL'))}'\")
-print(f\"capabilities='{q(kv('CAPABILITIES'))}'\")
-print(f\"run_mode='{q(kv('RUN_MODE'))}'\")
-print(f\"default_scope='{q(section('Default Scope'))}'\")
-print(f\"tools_section='{q(section('Tools Section'))}'\")
-print(f\"agent_instructions='{q(section('Agent Instructions'))}'\")
-")"
 
-    # Assemble CLAUDE.md from template
-    local assembled="$agent_dir/CLAUDE.md"
-    cp "$TEMPLATE" "$assembled"
+model = kv('MODEL') or default_model
+capabilities = kv('CAPABILITIES') or 'nop:execute'
+run_mode = kv('RUN_MODE') or 'single-shot'
+default_scope = section('Default Scope')
+tools_section = section('Tools Section')
+agent_instructions = section('Agent Instructions')
 
-    sed -i '' "s|{{AGENT_ID}}|$agent_id|g" "$assembled"
-    sed -i '' "s|{{AGENT_TYPE}}|$agent_type|g" "$assembled"
-    sed -i '' "s|{{MODEL}}|${model:-$DEFAULT_MODEL}|g" "$assembled"
-    sed -i '' "s|{{ISSUER_DOMAIN}}|$ISSUER_DOMAIN|g" "$assembled"
-    sed -i '' "s|{{ISSUER}}|$ISSUER|g" "$assembled"
-    sed -i '' "s|{{CAPABILITIES}}|${capabilities:-nop:execute}|g" "$assembled"
-    sed -i '' "s|{{INBOX_PATH}}|./inbox/|g" "$assembled"
-    sed -i '' "s|{{RUN_MODE}}|${run_mode:-single-shot}|g" "$assembled"
-
-    python3 -c "
-content = open('$assembled').read()
-sections = {
-    '{{DEFAULT_SCOPE}}': '''$default_scope'''.strip(),
-    '{{TOOLS_SECTION}}': '''$tools_section'''.strip(),
-    '{{AGENT_INSTRUCTIONS}}': '''$agent_instructions'''.strip(),
+subs = {
+    '{{AGENT_ID}}':       agent_id,
+    '{{AGENT_TYPE}}':     agent_type,
+    '{{MODEL}}':          model,
+    '{{ISSUER_DOMAIN}}':  issuer_domain,
+    '{{ISSUER}}':         issuer,
+    '{{CAPABILITIES}}':   capabilities,
+    '{{INBOX_PATH}}':     './inbox/',
+    '{{RUN_MODE}}':       run_mode,
+    '{{DEFAULT_SCOPE}}':  default_scope,
+    '{{TOOLS_SECTION}}':  tools_section,
+    '{{AGENT_INSTRUCTIONS}}': agent_instructions,
 }
-for placeholder, replacement in sections.items():
+
+content = open(template_file).read()
+for placeholder, replacement in subs.items():
     content = content.replace(placeholder, replacement)
-open('$assembled', 'w').write(content)
-"
+
+open(out_file, 'w').write(content)
+PYEOF
 
     # Permissive .claude/settings.json for the worker (operator-owned scope enforcement)
     cat > "$agent_dir/.claude/settings.json" << 'SETTINGS'
@@ -189,11 +203,12 @@ cmd_dispatch() {
 
     _budget_for_category() {
         if [[ -f "$CONFIG_FILE" ]]; then
-            python3 -c "
-import json
-d = json.load(open('$CONFIG_FILE'))
-print(d.get('category_budget_npt', {}).get('$1', $DEFAULT_BUDGET_NPT))
-"
+            python3 - "$CONFIG_FILE" "$1" "$DEFAULT_BUDGET_NPT" <<'PYEOF'
+import json, sys
+config_file, category, fallback = sys.argv[1], sys.argv[2], int(sys.argv[3])
+d = json.load(open(config_file))
+print(d.get('category_budget_npt', {}).get(category, fallback))
+PYEOF
         else
             echo "$DEFAULT_BUDGET_NPT"
         fi
@@ -254,48 +269,63 @@ print(d.get('category_budget_npt', {}).get('$1', $DEFAULT_BUDGET_NPT))
         fi
     fi
 
-    local scope_json="[]"
-    if [[ -n "$scope" ]]; then
-        scope_json=$(echo "$scope" | python3 -c "import sys,json; print(json.dumps(sys.stdin.read().strip().split(',')))")
-    fi
-
     local context_json='{}'
     if [[ -n "$context_file" && -f "$context_file" ]]; then
         context_json=$(cat "$context_file")
     fi
 
     local intent_file="$agent_dir/inbox/${task_id}.intent.json"
+    # Use Python's datetime for real millisecond precision (matches TS
+    # dispatch.ts / nop-agent.ts ISOString format; bash `date` on macOS fakes ms).
     local created_at
-    created_at=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+    created_at=$(python3 -c "import datetime; print(datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00','Z'))")
 
-    python3 -c "
-import json
+    # All operator-controlled values pass via argv or env — never interpolated
+    # into Python source. Eliminates injection via crafted intent text, agent
+    # IDs, or context paths. `context` payload read from file if supplied.
+    python3 - \
+        "$intent_text" "$task_id" "$ISSUER_DOMAIN" "$ISSUER" "$agent_id" \
+        "$created_at" "$priority" "$category" "$scope" "$model" \
+        "$time_limit" "$budget" "$context_json" \
+        <<'PYEOF' > "$intent_file"
+import json, sys
+(_, intent_text, task_id, issuer_domain, issuer, agent_id,
+ created_at, priority, category, scope_str, model,
+ time_limit, budget, context_json) = sys.argv
+
+scope_list = [s for s in scope_str.split(',') if s] if scope_str else []
+
+try:
+    context = json.loads(context_json) if context_json and context_json.strip() else {}
+except json.JSONDecodeError:
+    context = {}
+
 intent = {
     '_ncp': 1,
     'type': 'intent',
-    'intent': '''$intent_text''',
+    'intent': intent_text,
     'confidence': 0.95,
     'payload': {
         '_nop': 1,
-        'id': '$task_id',
-        'from': 'urn:nps:agent:$ISSUER_DOMAIN:$ISSUER',
-        'to': 'urn:nps:agent:$ISSUER_DOMAIN:$agent_id',
-        'created_at': '$created_at',
-        'priority': '$priority',
-        'category': '$category',
+        'id': task_id,
+        'from': f'urn:nps:agent:{issuer_domain}:{issuer}',
+        'to':   f'urn:nps:agent:{issuer_domain}:{agent_id}',
+        'created_at': created_at,
+        'priority': priority,
+        'category': category,
         'mailbox': {'base': './'},
-        'context': $context_json,
+        'context': context,
         'constraints': {
-            'model': '$model',
-            'time_limit': $time_limit,
-            'scope': $scope_json,
+            'model': model,
+            'time_limit': int(time_limit),
+            'scope': scope_list,
             'proceed_gate': False,
-            'budget_npt': $budget
-        }
-    }
+            'budget_npt': int(budget),
+        },
+    },
 }
 print(json.dumps(intent, indent=2))
-" > "$intent_file"
+PYEOF
 
     log "Intent created: $task_id"
 
@@ -330,7 +360,11 @@ print(json.dumps(intent, indent=2))
     # an approximate USD ceiling from the NPT budget. Rough: 1000 NPT ≈ $0.005
     # on Sonnet. Over-generous rather than blocking legitimate work.
     local budget_usd_derived
-    budget_usd_derived=$(python3 -c "print(max(0.50, $budget * 0.00001))")
+    budget_usd_derived=$(python3 - "$budget" <<'PYEOF'
+import sys
+print(max(0.50, int(sys.argv[1]) * 0.00001))
+PYEOF
+)
 
     local output
     output=$(cd "$agent_dir" && claude -p "$prompt" \
@@ -351,34 +385,55 @@ print(json.dumps(intent, indent=2))
     local clean_json
     clean_json=$(echo "$output" | grep '^{' | head -1)
 
-    local result cost_usd cost_npt denials turns status_val stop_reason
+    local result="NO JSON OUTPUT"
+    local cost_usd="0.0000"
+    local cost_npt="0"
+    local denials="0"
+    local turns="0"
+    local stop_reason="?"
+    local status_val="error"
+
     if [[ -n "$clean_json" ]]; then
-        eval "$(echo "$clean_json" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-def q(s): return str(s).replace(\"'\", \"'\\\\''\")
-usage = d.get('usage', {}) or {}
-input_tokens = usage.get('input_tokens', 0) or 0
-output_tokens = usage.get('output_tokens', 0) or 0
-cache_read = usage.get('cache_read_input_tokens', 0) or 0
-# NPT approximation for v0.1.0: sum of distinct input-side + output tokens.
-# Cross-model standardization per NPS-0 §4.3 requires a full token-budget.md
-# implementation; this is a defensible placeholder until v0.2.0.
-cost_npt_val = input_tokens + output_tokens + cache_read
-print(f\"result='{q(d.get('result','NO RESULT')[:500])}'\")
-print(f\"cost_usd='{d.get('total_cost_usd',0):.4f}'\")
-print(f\"cost_npt={cost_npt_val}\")
-print(f\"denials='{len(d.get('permission_denials',[]))}'\")
-print(f\"turns='{d.get('num_turns','?')}'\")
-print(f\"stop_reason='{q(d.get('stop_reason','?'))}'\")
-print(f\"status_val='{'error' if d.get('is_error') else 'success'}'\")
-" 2>/dev/null)" || {
+        # Parse worker result JSON via stdin → tab-separated fields. stdin
+        # carries untrusted worker output but it's never parsed as Python or
+        # shell code, and the `read` below is `IFS=$'\t'` so newlines/tabs
+        # within fields can't corrupt the structure.
+        #
+        # NPT approximation for v0.1.0: input + output + cache_read tokens.
+        # Full NPS-0 §4.3 token-budget.md implementation lands in v0.2.0.
+        local parse_out
+        parse_out=$(echo "$clean_json" | python3 - <<'PYEOF' 2>/dev/null || true
+import json, sys
+try:
+    d = json.loads(sys.stdin.read())
+except json.JSONDecodeError:
+    sys.exit(1)
+usage = d.get('usage') or {}
+cost_npt_val = (
+    (usage.get('input_tokens') or 0)
+    + (usage.get('output_tokens') or 0)
+    + (usage.get('cache_read_input_tokens') or 0)
+)
+fields = [
+    str(d.get('result', 'NO RESULT'))[:500].replace('\t', ' ').replace('\n', ' '),
+    f"{d.get('total_cost_usd', 0):.4f}",
+    str(cost_npt_val),
+    str(len(d.get('permission_denials') or [])),
+    str(d.get('num_turns', 0)),
+    str(d.get('stop_reason', '?')),
+    'error' if d.get('is_error') else 'success',
+]
+print('\t'.join(fields))
+PYEOF
+        )
+        if [[ -n "$parse_out" ]]; then
+            IFS=$'\t' read -r result cost_usd cost_npt denials turns stop_reason status_val <<< "$parse_out"
+        else
             result="PARSE ERROR"
-            cost_usd="?"; cost_npt="0"; denials="?"; turns="?"; stop_reason="?"; status_val="?"
-        }
+            status_val="error"
+        fi
     else
         warn "No JSON found in worker output"
-        result="NO JSON OUTPUT"; cost_usd="?"; cost_npt="0"; denials="?"; turns="?"; stop_reason="?"; status_val="error"
     fi
 
     log "Worker finished in ${duration}s (cost: ${cost_npt} NPT / \$${cost_usd}, turns: $turns, denials: $denials)"
@@ -475,17 +530,17 @@ cmd_status() {
     if [[ -n "$latest" ]]; then
         echo ""
         echo "Latest result:"
-        python3 -c "
-import json
-d = json.load(open('$latest'))
+        python3 - "$latest" <<'PYEOF' 2>/dev/null || cat "$latest"
+import json, sys
+d = json.load(open(sys.argv[1]))
 p = d.get('payload', {})
-print(f\"  Task:      {p.get('id', '?')}\")
-print(f\"  Status:    {p.get('status', '?')}\")
-print(f\"  Duration:  {p.get('duration', '?')}s\")
-print(f\"  Cost NPT:  {p.get('cost_npt', '?')}\")
-print(f\"  Files:     {p.get('files_changed', [])}\")
-print(f\"  Summary:   {d.get('value', '?')[:200]}\")
-" 2>/dev/null || cat "$latest"
+print(f"  Task:      {p.get('id', '?')}")
+print(f"  Status:    {p.get('status', '?')}")
+print(f"  Duration:  {p.get('duration', '?')}s")
+print(f"  Cost NPT:  {p.get('cost_npt', '?')}")
+print(f"  Files:     {p.get('files_changed', [])}")
+print(f"  Summary:   {str(d.get('value', '?'))[:200]}")
+PYEOF
     fi
 }
 
@@ -521,16 +576,23 @@ cmd_merge() {
     done
     if [[ -z "$branch_file" ]]; then err "No branch metadata for $task_id"; exit 1; fi
 
-    local branch worktree original_scope agent_id target_branch
-    eval "$(python3 -c "
-import json
-d = json.load(open('$branch_file'))
-print(f\"branch='{d['branch']}'\")
-print(f\"worktree='{d['worktree']}'\")
-print(f\"original_scope='{d['original_scope']}'\")
-print(f\"agent_id='{d['agent_id']}'\")
-print(f\"target_branch='{d.get('target_branch', 'main')}'\")
-" 2>/dev/null)"
+    local branch="" worktree="" original_scope="" agent_id="" target_branch=""
+    local meta_out
+    meta_out=$(python3 - "$branch_file" <<'PYEOF' 2>/dev/null || true
+import json, sys
+d = json.load(open(sys.argv[1]))
+print('\t'.join([
+    d.get('branch', ''),
+    d.get('worktree', ''),
+    d.get('original_scope', ''),
+    d.get('agent_id', ''),
+    d.get('target_branch', 'main'),
+]))
+PYEOF
+    )
+    if [[ -n "$meta_out" ]]; then
+        IFS=$'\t' read -r branch worktree original_scope agent_id target_branch <<< "$meta_out"
+    fi
 
     if [[ -z "$branch" || -z "$original_scope" ]]; then err "Invalid branch metadata"; exit 1; fi
 
