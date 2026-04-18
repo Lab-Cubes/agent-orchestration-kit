@@ -15,7 +15,8 @@ nps-kit/
 ├── kits/              # Adopter kits (clone, set up, run)
 │   └── agents/        # NOP multi-agent orchestration — mailbox + spawn + workers
 └── plugins/           # Optional hook plugins for the kits
-    └── discord/       # Discord notifications for kits/agents
+    ├── discord/       # Discord notifications for kits/agents
+    └── cost-monitor/  # Per-task NPT/USD cost logging and reporting
 ```
 
 ## Quick start — token-savings demo in 5 minutes
@@ -36,7 +37,7 @@ NOP mailbox dispatch — and shows real NPT saved on your machine.
 | A developer using NPS in your code | [`packages/codec`](./packages/codec) — wire codec — and [`packages/identity`](./packages/identity) — Ed25519 identity |
 | An operator wanting multi-agent orchestration now | [`kits/agents`](./kits/agents) — clone, `./bin/setup`, run |
 | An AI agent scanning this repo for an operator | Every directory has an `AGENTS.md` with exact install steps |
-| A plugin author | [`plugins/discord`](./plugins/discord) as a template; see [`kits/agents/hooks/README.md`](./kits/agents/hooks/README.md) for the contract |
+| A plugin author | [`plugins/cost-monitor`](./plugins/cost-monitor) (minimal: one hook, no credentials) or [`plugins/discord`](./plugins/discord) as templates; see [`kits/agents/hooks/README.md`](./kits/agents/hooks/README.md) for the contract |
 
 ## The NPS protocol family
 
