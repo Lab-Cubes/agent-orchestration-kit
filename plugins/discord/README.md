@@ -45,7 +45,6 @@ Next agent dispatch will post to Discord.
     "coder-02":     "coder2",
     "critic-01":    "critic",
     "researcher-01":"researcher",
-    "sage":         "orchestrator",
     "dispatcher":   "orchestrator"
   }
 }
@@ -70,8 +69,7 @@ copying tokens into `config.json`:
     "coder-01":     "coder1",
     "coder-02":     "coder2",
     "critic-01":    "critic",
-    "researcher-01":"researcher",
-    "sage":         "orchestrator"
+    "researcher-01":"researcher"
   }
 }
 ```
