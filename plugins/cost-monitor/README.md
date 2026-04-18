@@ -28,7 +28,7 @@ bin/report
 When a task completes, `on-task-completed.sh` writes to stderr:
 
 ```
-[cost] coder-01 task-sage-20260418-201245: 1.23 NPT (~$0.0012) · 136s · code
+[cost] coder-01 task-operator-20260418-201245: 1.23 NPT (~$0.0012) · 136s · code
 ```
 
 | Field | Source |
