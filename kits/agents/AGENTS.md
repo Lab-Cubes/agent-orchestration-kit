@@ -98,8 +98,8 @@ Edit these files only if the operator requests changes:
 
 - `.env` — runtime paths. Defaults work for single-machine use.
 - `config.json` — issuer domain, default model, NPT budgets. The `issuer_domain`
-  defaults to `dev.localhost`; change it to the operator's org domain for
-  production use.
+  defaults to `dev.localhost`; change it to your org's domain when deploying
+  beyond dev experimentation.
 
 ## Failure modes
 
