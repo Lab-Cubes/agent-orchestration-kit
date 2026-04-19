@@ -225,3 +225,35 @@ _init_scope_repo() {
         'refs/heads/agent/coder-01/*' 2>/dev/null | wc -l | tr -d ' ')
     [ "$agent_count" -eq 1 ]
 }
+
+# ---------------------------------------------------------------------------
+# Worker prompt — bug #9. The prompt passed via `claude -p` currently uses
+# relative paths (./inbox/, ./active/, ./done/) which resolve against the
+# worker's cwd. A worker with a worktree scope may cd into the worktree and
+# have relative "./done/" land in the wrong filesystem location. Fix: the
+# prompt must reference absolute mailbox paths.
+# ---------------------------------------------------------------------------
+
+@test "worker prompt references absolute mailbox paths, not relative" {
+    export MOCK_CLAUDE_MODE=happy
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "prompt path semantics test" \
+        --category code --time-limit 60
+
+    # The args log captures everything passed to claude, including the
+    # -p prompt content.
+    [ -s "$MOCK_CLAUDE_ARGS_FILE" ]
+
+    # Absolute mailbox paths must appear so the worker's cwd cannot
+    # redirect mailbox operations elsewhere.
+    grep -qF "$KIT_AGENTS/coder-01/inbox" "$MOCK_CLAUDE_ARGS_FILE"
+    grep -qF "$KIT_AGENTS/coder-01/active" "$MOCK_CLAUDE_ARGS_FILE"
+    grep -qF "$KIT_AGENTS/coder-01/done" "$MOCK_CLAUDE_ARGS_FILE"
+
+    # Relative mailbox references must not appear in the prompt. These
+    # are the ones that silently break when cwd changes.
+    ! grep -qE "\./inbox/" "$MOCK_CLAUDE_ARGS_FILE"
+    ! grep -qE "\./active/" "$MOCK_CLAUDE_ARGS_FILE"
+    ! grep -qE "\./done/" "$MOCK_CLAUDE_ARGS_FILE"
+}
