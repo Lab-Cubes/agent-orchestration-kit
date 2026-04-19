@@ -167,3 +167,61 @@ teardown() {
         [ "$rows" -le 1 ]
     fi
 }
+
+# ---------------------------------------------------------------------------
+# Branch-name override — bug #5. The spawner currently hardcodes
+# branch_name="agent/<id>/<task-id>" at spawn-agent.sh:260 with no way to
+# override, so a brief's requested branch name is silently ignored. Fix:
+# surface a --branch-name flag.
+# ---------------------------------------------------------------------------
+
+# Helper: stand up a throwaway git repo inside the test tree to use as scope.
+_init_scope_repo() {
+    local repo="$1"
+    mkdir -p "$repo"
+    git -C "$repo" init -q -b main
+    git -C "$repo" -c user.email=t@t.local -c user.name=t commit --allow-empty -m init -q
+}
+
+@test "--branch-name overrides the auto-generated agent/<id>/<task-id>" {
+    export MOCK_CLAUDE_MODE=happy
+
+    local scope_repo="$KIT_TREE/scope-repo"
+    _init_scope_repo "$scope_repo"
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "branch-name override test" \
+        --scope "$scope_repo" --branch-name "feat/custom-branch" \
+        --category code --time-limit 60
+
+    [ "$status" -eq 0 ]
+
+    # Operator-requested branch must exist on the scope repo
+    run git -C "$scope_repo" rev-parse --verify --quiet "feat/custom-branch"
+    [ "$status" -eq 0 ]
+
+    # Auto-generated pattern must NOT have been created
+    local auto_count
+    auto_count=$(git -C "$scope_repo" for-each-ref --format='%(refname:short)' \
+        'refs/heads/agent/coder-01/*' 2>/dev/null | wc -l | tr -d ' ')
+    [ "$auto_count" -eq 0 ]
+}
+
+@test "default branch name is agent/<id>/<task-id> when --branch-name omitted" {
+    export MOCK_CLAUDE_MODE=happy
+
+    local scope_repo="$KIT_TREE/scope-repo"
+    _init_scope_repo "$scope_repo"
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "default branch name test" \
+        --scope "$scope_repo" --category code --time-limit 60
+
+    [ "$status" -eq 0 ]
+
+    # Exactly one agent/coder-01/task-* branch must have been created
+    local agent_count
+    agent_count=$(git -C "$scope_repo" for-each-ref --format='%(refname:short)' \
+        'refs/heads/agent/coder-01/*' 2>/dev/null | wc -l | tr -d ' ')
+    [ "$agent_count" -eq 1 ]
+}
