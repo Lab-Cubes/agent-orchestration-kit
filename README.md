@@ -57,6 +57,7 @@ Protocol spec and language SDKs live at [labacacia/NPS-Release](https://github.c
 - pnpm ≥ 10
 - git
 - Python 3 (for JSON processing in shell scripts)
+- bats (bats-core) — for running the test suite. Install: `brew install bats-core` (macOS) / `apt install bats` (Linux) / see https://bats-core.readthedocs.io
 - An AI agent CLI — the reference implementation uses [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code); adopters can wrap any runtime's equivalent. No API keys managed by this kit — use your own runtime subscription.
 
 ## Status
