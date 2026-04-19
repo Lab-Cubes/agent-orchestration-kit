@@ -1,0 +1,17 @@
+{
+  "issuer_domain": "test.localhost",
+  "issuer_agent_id": "test-operator",
+  "default_capabilities": ["nop:execute"],
+  "default_budget_npt": 40000,
+  "category_budget_npt": {
+    "code":     40000,
+    "docs":     60000,
+    "test":     30000,
+    "research": 60000,
+    "refactor": 60000,
+    "ops":      40000
+  },
+  "default_model": "sonnet",
+  "default_time_limit_s": 900,
+  "default_max_turns": 100
+}
