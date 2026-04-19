@@ -9,7 +9,7 @@ AGENT_NAME: coder-01
 AGENT_ID: coder-01
 AGENT_TYPE: coder
 MODEL: sonnet
-CAPABILITIES: nop:execute, code:write, git:commit, file:read
+CAPABILITIES: nop:execute
 ```
 
 ## Default Scope
@@ -68,16 +68,13 @@ I write, fix, and improve code. Tasks come as intent messages describing:
 RUN_MODE: single-shot
 ```
 
-## Permissions
+## RuntimePermissions
 
-Generated into the worker's `.claude/settings.json` at setup time.
-Coders have full capabilities inside their worktree — the worktree is
-the isolation boundary, not permissions.
+Adapter-specific documentation. Not enforced by the kit — the worktree is the
+isolation boundary. See memory/dev-sessions/knowledge/runtime-helper-experiment.md
+for why .claude/settings.json allow/deny was deprecated.
 
-Allow:
-- Read(*)
-- Glob(*)
-- Grep(*)
-- Write(**)
-- Edit(**)
-- Bash
+For Claude Code adapter:
+- Read, Write, Edit, Glob, Grep (full file system access within worktree)
+- Bash: git commit, git diff, git status, git log, npm, npx, tsc, cargo, build/test tools
+- No push by default (requires explicit instruction and git:push capability)

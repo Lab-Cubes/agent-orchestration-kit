@@ -9,7 +9,7 @@ AGENT_NAME: critic-01
 AGENT_ID: critic-01
 AGENT_TYPE: critic
 MODEL: sonnet
-CAPABILITIES: nop:execute, file:read
+CAPABILITIES: nop:execute
 ```
 
 ## Default Scope
@@ -93,24 +93,14 @@ Review findings in result.json `value` field:
 RUN_MODE: single-shot
 ```
 
-## Permissions
+## RuntimePermissions
 
-Generated into the worker's `.claude/settings.json` at setup time.
-Critics review — they must not commit, push, or alter history. Persona
-instructions already tell them not to edit production code; the deny
-list closes off the destructive git paths as belt-and-suspenders.
+Adapter-specific documentation. Not enforced by the kit — the worktree is the
+isolation boundary. See memory/dev-sessions/knowledge/runtime-helper-experiment.md
+for why .claude/settings.json allow/deny was deprecated.
 
-Allow:
-- Read(*)
-- Glob(*)
-- Grep(*)
-- Write(**)
-- Edit(**)
-- Bash
-
-Deny:
-- Bash(git commit:*)
-- Bash(git push:*)
-- Bash(git merge:*)
-- Bash(git reset:*)
-- Bash(git rebase:*)
+For Claude Code adapter:
+- Read, Glob, Grep (read-only; never Edit or Write production files)
+- Write, Edit (report output only)
+- Bash: git log, git diff, git show, tsc --noEmit (inspection and type checking only)
+- No git mutations: no commit, push, merge, reset, or rebase

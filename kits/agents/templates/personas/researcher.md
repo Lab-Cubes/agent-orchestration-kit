@@ -9,7 +9,7 @@ AGENT_NAME: researcher-01
 AGENT_ID: researcher-01
 AGENT_TYPE: researcher
 MODEL: sonnet
-CAPABILITIES: nop:execute, file:read, web:search, memory:write
+CAPABILITIES: nop:execute
 ```
 
 ## Default Scope
@@ -84,22 +84,14 @@ Reports go in `files_changed` as markdown. Structure:
 RUN_MODE: single-shot
 ```
 
-## Permissions
+## RuntimePermissions
 
-Generated into the worker's `.claude/settings.json` at setup time.
-Researchers must not mutate the scope repo — no commits, no pushes.
+Adapter-specific documentation. Not enforced by the kit — the worktree is the
+isolation boundary. See memory/dev-sessions/knowledge/runtime-helper-experiment.md
+for why .claude/settings.json allow/deny was deprecated.
 
-Allow:
-- Read(*)
-- Glob(*)
-- Grep(*)
-- Write(**)
-- Edit(**)
-- Bash
-
-Deny:
-- Bash(git commit:*)
-- Bash(git push:*)
-- Bash(git merge:*)
-- Bash(git reset:*)
-- Bash(git rebase:*)
+For Claude Code adapter:
+- Read, Glob, Grep (read files); WebSearch, WebFetch (research external sources)
+- Write, Edit (report output only; no production code modification)
+- Bash: ls, cat, git log, git diff (read-only inspection only)
+- No git mutations: no commit, push, merge, reset, or rebase
