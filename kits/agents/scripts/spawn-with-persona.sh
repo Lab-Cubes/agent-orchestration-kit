@@ -22,7 +22,17 @@ TASK="${3:?task intent required}"
 shift 3
 
 NPS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-NPS_AGENTS_HOME="${NPS_AGENTS_HOME:-$NPS_DIR/agents}"
+# Default location matches spawn-agent.sh — see that script's
+# path-resolution comment for the security rationale and the
+# NPS_STATE_HOME / XDG_STATE_HOME / $HOME precedence.
+if [[ -n "${NPS_STATE_HOME:-}" ]]; then
+    NPS_STATE_HOME_DEFAULT="$NPS_STATE_HOME"
+elif [[ -n "${XDG_STATE_HOME:-}" ]]; then
+    NPS_STATE_HOME_DEFAULT="$XDG_STATE_HOME/nps-kit"
+else
+    NPS_STATE_HOME_DEFAULT="$HOME/.nps-kit"
+fi
+NPS_AGENTS_HOME="${NPS_AGENTS_HOME:-$NPS_STATE_HOME_DEFAULT/agents}"
 WORKER_DIR="$NPS_AGENTS_HOME/$AGENT_ID"
 ORIGINAL="$WORKER_DIR/CLAUDE.md"
 BACKUP="/tmp/${AGENT_ID}-CLAUDE.md.bak.$$"

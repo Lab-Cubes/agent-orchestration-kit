@@ -30,10 +30,34 @@
 set -euo pipefail
 
 # --- Paths (env-var driven; defaults work out-of-box) ---
+#
+# Runtime state (agents, worktrees, logs) defaults to $HOME/.nps-kit/ (or
+# $XDG_STATE_HOME/nps-kit on Linux systems that set XDG_STATE_HOME). Lives
+# OUTSIDE the cloned kit repo: if the worker's mailbox sat inside, a
+# `git commit` from the worker would walk up, find the kit's .git, and
+# land accidental commits on the kit's branches. User state lives in $HOME;
+# the kit repo stays code-only.
+#
+# Precedence, highest to lowest:
+#   1. NPS_AGENTS_HOME / NPS_WORKTREES_HOME / NPS_LOGS_HOME — individual overrides
+#   2. NPS_STATE_HOME — override the root for all three at once
+#   3. XDG_STATE_HOME (Linux convention) — $XDG_STATE_HOME/nps-kit
+#   4. Fallback — $HOME/.nps-kit
+#
+# Cross-platform: $HOME is set by macOS, Linux, WSL, Git Bash, MSYS2, and
+# Cygwin — all bash-capable environments. Native Windows PowerShell/cmd
+# can't run this script anyway.
 NPS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-NPS_AGENTS_HOME="${NPS_AGENTS_HOME:-$NPS_DIR/agents}"
-NPS_WORKTREES_HOME="${NPS_WORKTREES_HOME:-$NPS_DIR/worktrees}"
-NPS_LOGS_HOME="${NPS_LOGS_HOME:-$NPS_DIR/logs}"
+if [[ -n "${NPS_STATE_HOME:-}" ]]; then
+    NPS_STATE_HOME_DEFAULT="$NPS_STATE_HOME"
+elif [[ -n "${XDG_STATE_HOME:-}" ]]; then
+    NPS_STATE_HOME_DEFAULT="$XDG_STATE_HOME/nps-kit"
+else
+    NPS_STATE_HOME_DEFAULT="$HOME/.nps-kit"
+fi
+NPS_AGENTS_HOME="${NPS_AGENTS_HOME:-$NPS_STATE_HOME_DEFAULT/agents}"
+NPS_WORKTREES_HOME="${NPS_WORKTREES_HOME:-$NPS_STATE_HOME_DEFAULT/worktrees}"
+NPS_LOGS_HOME="${NPS_LOGS_HOME:-$NPS_STATE_HOME_DEFAULT/logs}"
 COST_LOG="$NPS_LOGS_HOME/dispatch-costs.csv"
 TEMPLATE="$NPS_DIR/templates/AGENT-CLAUDE.md"
 HOOKS_DIR="$NPS_DIR/hooks"

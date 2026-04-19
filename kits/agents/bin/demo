@@ -80,9 +80,22 @@ $(cat "$SUBJECT_FILE")"
 
 ./scripts/spawn-agent.sh clean researcher-01 > /dev/null 2>&1 || true
 
-naive_out="$NPS_DIR/logs/demo-naive.json"
-nop_out="$NPS_DIR/logs/demo-nop.json"
-mkdir -p "$NPS_DIR/logs"
+# Demo artefacts go under the kit's runtime state home. Default:
+# $HOME/.nps-kit/ (or $XDG_STATE_HOME/nps-kit on Linux systems that set
+# XDG_STATE_HOME). Any individual NPS_*_HOME env var overrides the
+# corresponding subdir.
+if [[ -n "${NPS_STATE_HOME:-}" ]]; then
+    STATE_HOME="$NPS_STATE_HOME"
+elif [[ -n "${XDG_STATE_HOME:-}" ]]; then
+    STATE_HOME="$XDG_STATE_HOME/nps-kit"
+else
+    STATE_HOME="$HOME/.nps-kit"
+fi
+DEMO_LOGS="${NPS_LOGS_HOME:-$STATE_HOME/logs}"
+DEMO_AGENTS="${NPS_AGENTS_HOME:-$STATE_HOME/agents}"
+naive_out="$DEMO_LOGS/demo-naive.json"
+nop_out="$DEMO_LOGS/demo-nop.json"
+mkdir -p "$DEMO_LOGS"
 
 # Run both paths concurrently. Each gets its own usage block in the JSON
 # response; NPT measurement is per-call so concurrency doesn't affect it.
@@ -128,7 +141,7 @@ naive_npt="${naive_stats%%|*}"
 naive_usd="${naive_stats##*|}"
 
 # Extract Path 2 NPT from researcher-01's result.json
-nop_result_dir="$NPS_DIR/agents/researcher-01/done"
+nop_result_dir="$DEMO_AGENTS/researcher-01/done"
 latest_result=$(ls -t "$nop_result_dir"/*.result.json 2>/dev/null | head -1 || echo "")
 if [[ -n "$latest_result" ]]; then
     nop_npt=$(python3 - "$latest_result" <<'PYEOF' 2>/dev/null || echo "0"

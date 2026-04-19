@@ -31,15 +31,34 @@ if [[ ! -f config.json ]]; then
 fi
 
 # 2. Runtime directories
-mkdir -p agents worktrees logs
-say "Runtime directories ready (agents/ worktrees/ logs/)"
+# Default to $HOME/.nps-kit/ (or $XDG_STATE_HOME/nps-kit on Linux systems
+# that set XDG_STATE_HOME) so worker mailboxes live outside the kit's git
+# tree. Prevents accidental commits to the kit from a worker's shell.
+# Operators can override any of NPS_STATE_HOME, NPS_AGENTS_HOME,
+# NPS_WORKTREES_HOME, NPS_LOGS_HOME to relocate — e.g.
+# NPS_STATE_HOME="$NPS_DIR" to keep the old in-kit layout.
+if [[ -n "${NPS_STATE_HOME:-}" ]]; then
+    STATE_HOME="$NPS_STATE_HOME"
+elif [[ -n "${XDG_STATE_HOME:-}" ]]; then
+    STATE_HOME="$XDG_STATE_HOME/nps-kit"
+else
+    STATE_HOME="$HOME/.nps-kit"
+fi
+AGENTS_HOME="${NPS_AGENTS_HOME:-$STATE_HOME/agents}"
+WORKTREES_HOME="${NPS_WORKTREES_HOME:-$STATE_HOME/worktrees}"
+LOGS_HOME="${NPS_LOGS_HOME:-$STATE_HOME/logs}"
+mkdir -p "$AGENTS_HOME" "$WORKTREES_HOME" "$LOGS_HOME"
+say "Runtime directories ready:"
+say "  agents    → $AGENTS_HOME"
+say "  worktrees → $WORKTREES_HOME"
+say "  logs      → $LOGS_HOME"
 
 # 3. Default workers
 for trio in "coder-01 coder" "critic-01 critic" "researcher-01 researcher"; do
     set -- $trio
     agent_id="$1"
     agent_type="$2"
-    if [[ -d "agents/$agent_id" ]]; then
+    if [[ -d "$AGENTS_HOME/$agent_id" ]]; then
         warn "Worker $agent_id already exists — skipping"
     else
         ./scripts/spawn-agent.sh setup "$agent_id" "$agent_type" > /dev/null
@@ -55,6 +74,6 @@ echo ""
 say "Setup complete."
 echo ""
 echo "Next steps:"
-echo "  ./bin/demo                              # Run the token-savings demo"
-echo "  ./scripts/spawn-agent.sh status coder-01  # Inspect a worker"
-echo "  edit config.json                        # Customize for your org"
+echo "  ./bin/demo                                  # Run the token-savings demo"
+echo "  ./scripts/spawn-agent.sh status coder-01    # Inspect a worker"
+echo "  edit config.json                            # Customize for your org"
