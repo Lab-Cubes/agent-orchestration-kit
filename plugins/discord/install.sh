@@ -51,8 +51,9 @@ for hook in "${HOOKS[@]}"; do
     chmod +x "$KIT_HOOKS_DIR/$hook"
 done
 
-ln -sf "$PLUGIN_DIR/config.json" "$KIT_HOOKS_DIR/config.json"
-say "Linked config.json into $KIT_HOOKS_DIR/"
+rel_target="$(python3 -c 'import os, sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$PLUGIN_DIR/config.json" "$KIT_HOOKS_DIR")"
+ln -sfn "$rel_target" "$KIT_HOOKS_DIR/config.json"
+say "Linked config.json into $KIT_HOOKS_DIR/ (→ $rel_target)"
 
 say "Installed ${#HOOKS[@]} hooks into $KIT_HOOKS_DIR/"
 say "Next worker dispatch will post to Discord."
