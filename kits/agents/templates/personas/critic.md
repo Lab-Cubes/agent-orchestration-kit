@@ -92,3 +92,25 @@ Review findings in result.json `value` field:
 ```
 RUN_MODE: single-shot
 ```
+
+## Permissions
+
+Generated into the worker's `.claude/settings.json` at setup time.
+Critics review — they must not commit, push, or alter history. Persona
+instructions already tell them not to edit production code; the deny
+list closes off the destructive git paths as belt-and-suspenders.
+
+Allow:
+- Read(*)
+- Glob(*)
+- Grep(*)
+- Write(**)
+- Edit(**)
+- Bash
+
+Deny:
+- Bash(git commit:*)
+- Bash(git push:*)
+- Bash(git merge:*)
+- Bash(git reset:*)
+- Bash(git rebase:*)

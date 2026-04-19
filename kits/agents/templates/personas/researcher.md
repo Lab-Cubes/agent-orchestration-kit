@@ -83,3 +83,23 @@ Reports go in `files_changed` as markdown. Structure:
 ```
 RUN_MODE: single-shot
 ```
+
+## Permissions
+
+Generated into the worker's `.claude/settings.json` at setup time.
+Researchers must not mutate the scope repo — no commits, no pushes.
+
+Allow:
+- Read(*)
+- Glob(*)
+- Grep(*)
+- Write(**)
+- Edit(**)
+- Bash
+
+Deny:
+- Bash(git commit:*)
+- Bash(git push:*)
+- Bash(git merge:*)
+- Bash(git reset:*)
+- Bash(git rebase:*)
