@@ -14,6 +14,10 @@ file, set `token_from_openclaw` to read tokens from there and avoid duplicating
 secrets. This is entirely optional — the plugin works standalone with tokens
 in `config.json`.
 
+## Prerequisites
+
+- curl — used to POST messages to the Discord API. Pre-installed on macOS and most Linux distros. Windows users: use Git Bash (includes curl) or WSL. To install manually: `brew install curl` (macOS) / `apt install curl` (Debian/Ubuntu).
+
 ## Quick start
 
 ```bash
