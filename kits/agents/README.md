@@ -24,8 +24,8 @@ see [§11 of the implementation spec](./docs/implementation-spec.md#11-runtime-s
 ## Quick start
 
 ```bash
-git clone https://github.com/Lab-Cubes/nps-kit.git
-cd nps-kit/kits/agents
+git clone https://github.com/Lab-Cubes/agent-orchestration-kit.git
+cd agent-orchestration-kit/kits/agents
 ./bin/setup
 ./bin/demo
 ```
