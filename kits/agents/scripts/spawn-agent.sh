@@ -143,22 +143,20 @@ cmd_setup() {
 
     log "Setting up worker: $agent_id (type: $agent_type)"
 
-    mkdir -p "$agent_dir"/{inbox,active,done,blocked,.claude}
+    mkdir -p "$agent_dir"/{inbox,active,done,blocked}
 
     # One Python pass: read persona + template from argv, do all substitutions,
     # write the assembled CLAUDE.md. Fixes (a) sed -i '' macOS-only issue and
     # (b) every Python-string-interpolation injection by passing all values
     # through argv (never parsed as Python code).
     local assembled="$agent_dir/CLAUDE.md"
-    local settings_json="$agent_dir/.claude/settings.json"
     python3 - \
         "$persona_file" "$TEMPLATE" "$assembled" \
         "$agent_id" "$agent_type" \
         "${DEFAULT_MODEL}" "$ISSUER_DOMAIN" "$ISSUER" \
-        "$settings_json" \
         <<'PYEOF'
-import re, sys, json
-persona_file, template_file, out_file, agent_id, agent_type, default_model, issuer_domain, issuer, settings_path = sys.argv[1:]
+import re, sys
+persona_file, template_file, out_file, agent_id, agent_type, default_model, issuer_domain, issuer = sys.argv[1:]
 
 persona = open(persona_file).read()
 
@@ -197,20 +195,6 @@ for placeholder, replacement in subs.items():
     content = content.replace(placeholder, replacement)
 
 open(out_file, 'w').write(content)
-
-# Parse ## Permissions section and write persona-specific settings.json
-perm_block = section('Permissions')
-allow, deny = [], []
-current = None
-for line in perm_block.split('\n'):
-    stripped = line.strip()
-    if stripped.lower().startswith('allow:'):
-        current = allow
-    elif stripped.lower().startswith('deny:'):
-        current = deny
-    elif stripped.startswith('- ') and current is not None:
-        current.append(stripped[2:].strip())
-open(settings_path, 'w').write(json.dumps({'permissions': {'allow': allow, 'deny': deny}}, indent=2) + '\n')
 PYEOF
 
     log "Worker $agent_id ready at $agent_dir"
