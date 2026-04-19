@@ -204,6 +204,7 @@ cmd_dispatch() {
     local context_file=""
     local dry_run=false
     local target_branch=""
+    local branch_name_override=""
 
     _budget_for_category() {
         if [[ -f "$CONFIG_FILE" ]]; then
@@ -229,6 +230,7 @@ PYEOF
             --category)      category="$2"; shift 2 ;;
             --context-file)  context_file="$2"; shift 2 ;;
             --dry-run)       dry_run=true; shift ;;
+            --branch-name)   branch_name_override="$2"; shift 2 ;;
             --target-branch) target_branch="$2"; shift 2 ;;
             *) err "Unknown option: $1"; exit 1 ;;
         esac
@@ -261,7 +263,11 @@ PYEOF
                     exit 1
                 fi
             fi
-            branch_name="agent/${agent_id}/${task_id}"
+            if [[ -n "$branch_name_override" ]]; then
+                branch_name="$branch_name_override"
+            else
+                branch_name="agent/${agent_id}/${task_id}"
+            fi
             worktree_path="$NPS_WORKTREES_HOME/$task_id"
             mkdir -p "$NPS_WORKTREES_HOME"
             if ! $dry_run; then
@@ -646,6 +652,7 @@ case "${1:-help}" in
         echo "  --category CAT     code|docs|test|research|refactor|ops"
         echo "  --context-file F   JSON context file"
         echo "  --dry-run          Print intent without launching"
+        echo "  --branch-name B    Worktree branch name (default: agent/<id>/<task-id>)"
         echo "  --target-branch B  Merge target (default: auto-detect)"
         ;;
 esac
