@@ -93,11 +93,42 @@ Create `templates/personas/{type}.md` following the pattern of `coder.md`,
 
 ## Configuration
 
-- `.env` — paths (`NPS_AGENTS_HOME`, `NPS_WORKTREES_HOME`, `NPS_LOGS_HOME`)
+- `.env` — override runtime paths if you want a custom layout
+  (`NPS_AGENTS_HOME`, `NPS_WORKTREES_HOME`, `NPS_LOGS_HOME`)
 - `config.json` — issuer domain, default model, NPT budgets, time limits
 
 Both copied from `.env.example` / `config.example.json` on first setup.
-Defaults work out of the box for single-machine use.
+
+### Where runtime state lives
+
+By default, your workers' mailboxes, worktrees, and logs live under
+**`$HOME/.nps-kit/`**, not inside the cloned kit. This keeps the kit repo
+code-only and stops a worker's `git commit` from accidentally landing on
+a kit branch.
+
+```
+$HOME/.nps-kit/
+├── agents/       # worker mailboxes (inbox/, active/, done/, blocked/)
+├── worktrees/    # per-task git worktrees
+└── logs/         # dispatch-costs.csv, hooks.log
+```
+
+**Path resolution** (highest priority first):
+
+1. `NPS_AGENTS_HOME` / `NPS_WORKTREES_HOME` / `NPS_LOGS_HOME` — per-dir overrides
+2. `NPS_STATE_HOME` — one root for all three (`$NPS_STATE_HOME/{agents,worktrees,logs}`)
+3. `XDG_STATE_HOME` — Linux XDG convention (`$XDG_STATE_HOME/nps-kit/...`)
+4. Fallback — `$HOME/.nps-kit/...`
+
+If you prefer everything inside the kit (per-clone isolation), set
+`NPS_STATE_HOME="$NPS_DIR"` — or override each path individually.
+
+### Platforms
+
+Runs on **macOS**, **Linux**, and **Windows** (via Git Bash, WSL, MSYS2,
+or Cygwin). The kit is bash scripts; native Windows PowerShell / cmd
+can't run them. Linux users with `XDG_STATE_HOME` set get the XDG-
+compliant location automatically.
 
 ## Notifications (plugins)
 
