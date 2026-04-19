@@ -21,8 +21,8 @@ agent-orchestration-kit/
 ## Quick start — token-savings demo in 5 minutes
 
 ```bash
-git clone https://github.com/Lab-Cubes/nps-kit.git
-cd kits/agents && ./bin/setup && ./bin/demo
+git clone https://github.com/Lab-Cubes/agent-orchestration-kit.git
+cd agent-orchestration-kit/kits/agents && ./bin/setup && ./bin/demo
 ```
 
 The demo runs the same task two ways — naive prompt-embedded context vs NOP
