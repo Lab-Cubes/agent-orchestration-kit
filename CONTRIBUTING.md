@@ -38,6 +38,16 @@ docs(spec): clarify NPS-5 §3.2 scope carving
 chore(pkg): update OSS metadata
 ```
 
+## Before pushing
+
+Run the secrets check locally — it's the same check CI runs:
+
+```bash
+./scripts/check-secrets.sh
+```
+
+The script blocks hardcoded personal home-directory paths (macOS, Linux, WSL) and common secret patterns (Anthropic, OpenAI, GitHub, AWS, Discord tokens). Exit 0 is clean; exit 1 lists violations with file and line.
+
 ## Running tests
 
 ```bash
