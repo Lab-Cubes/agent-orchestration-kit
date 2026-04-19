@@ -284,6 +284,12 @@ PYEOF
     local created_at
     created_at=$(python3 -c "import datetime; print(datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00','Z'))")
 
+    # Write to a temp file first — the intent only lands in inbox/ when we
+    # know this is a real dispatch. Dry-run prints and discards the temp file,
+    # leaving the mailbox untouched (bug #6 fix).
+    local tmp_intent
+    tmp_intent=$(mktemp)
+
     # All operator-controlled values pass via argv or env — never interpolated
     # into Python source. Eliminates injection via crafted intent text, agent
     # IDs, or context paths. `context` payload read from file if supplied.
@@ -291,7 +297,7 @@ PYEOF
         "$intent_text" "$task_id" "$ISSUER_DOMAIN" "$ISSUER" "$agent_id" \
         "$created_at" "$priority" "$category" "$scope" "$model" \
         "$time_limit" "$budget" "$context_json" \
-        <<'PYEOF' > "$intent_file"
+        <<'PYEOF' > "$tmp_intent"
 import json, sys
 (_, intent_text, task_id, issuer_domain, issuer, agent_id,
  created_at, priority, category, scope_str, model,
@@ -335,9 +341,12 @@ PYEOF
 
     if $dry_run; then
         log "DRY RUN — not launching worker"
-        cat "$intent_file"
+        cat "$tmp_intent"
+        rm -f "$tmp_intent"
         return 0
     fi
+
+    mv "$tmp_intent" "$intent_file"
 
     # Hook: task claimed (fires when intent lands in inbox, before dispatch)
     run_hook "task-claimed" "$task_id" "$agent_id" "pending" "0"
