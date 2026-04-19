@@ -7,6 +7,12 @@
 
 set -euo pipefail
 
+if ! command -v curl >/dev/null 2>&1; then
+    echo 'error: curl is required but not found' >&2
+    echo 'install via: brew install curl (macOS), apt install curl (Debian/Ubuntu)' >&2
+    exit 1
+fi
+
 PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 KIT_HOOKS_DIR="$PLUGIN_DIR/../../kits/agents/hooks"
 
