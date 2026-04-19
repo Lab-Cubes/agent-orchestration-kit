@@ -92,12 +92,16 @@ run_hook() {
 
     [[ -x "$hook_script" ]] || return 0
 
+    local hook_log="$NPS_LOGS_HOME/hooks.log"
+    mkdir -p "$(dirname "$hook_log")"
+    printf '=== %s event=%s task=%s agent=%s ===\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$event" "$task_id" "$agent_id" >> "$hook_log"
     NPS_TASK_ID="$task_id" \
     NPS_AGENT_ID="$agent_id" \
     NPS_STATUS="$status" \
     NPS_COST_NPT="$cost_npt" \
     NPS_EVENT="$event" \
-      "$hook_script" < /dev/null > /dev/null 2>&1 || warn "hook $event exited non-zero"
+      "$hook_script" < /dev/null >> "$hook_log" 2>&1 || warn "hook $event exited non-zero"
 }
 
 # --- setup ---
