@@ -67,3 +67,17 @@ I write, fix, and improve code. Tasks come as intent messages describing:
 ```
 RUN_MODE: single-shot
 ```
+
+## Permissions
+
+Generated into the worker's `.claude/settings.json` at setup time.
+Coders have full capabilities inside their worktree — the worktree is
+the isolation boundary, not permissions.
+
+Allow:
+- Read(*)
+- Glob(*)
+- Grep(*)
+- Write(**)
+- Edit(**)
+- Bash
