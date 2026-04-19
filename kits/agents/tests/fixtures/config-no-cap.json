@@ -1,0 +1,6 @@
+{
+  "model_rates": {
+    "sonnet": { "npt_usd": 0.000025 }
+  },
+  "nop_overhead_usd": 0.10
+}

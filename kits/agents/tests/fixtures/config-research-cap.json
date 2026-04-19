@@ -1,0 +1,9 @@
+{
+  "category_usd_cap": {
+    "research": 2.0
+  },
+  "model_rates": {
+    "sonnet": { "npt_usd": 0.000025 }
+  },
+  "nop_overhead_usd": 0.10
+}

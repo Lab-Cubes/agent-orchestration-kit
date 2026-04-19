@@ -358,28 +358,14 @@ PYEOF
 
     # Claude CLI's --max-budget-usd is the closest available kill-switch; we derive
     # a USD ceiling from the NPT budget. Priority:
-    #   1. category_usd_cap from config (exact policy ceiling per category)
-    #   2. budget_npt * model_rates[model].npt_usd (NPT-derived, model-calibrated)
-    #   3. fallback: budget_npt * 0.000025 (Sonnet default)
+    #   1. budget_npt * model_rates[model].npt_usd + nop_overhead_usd (NPT-derived)
+    #   2. category_usd_cap[category] — if present, caps the derived value (ceiling)
+    #   3. fallback: budget_npt * 0.000025 when config is absent (Sonnet default)
+    # category_usd_cap is a CEILING, not the target: operator --budget can go lower.
     # Rates: config.model_rates[model].npt_usd (Sonnet: $0.000025/NPT = $1.00/40K NPT).
     local budget_usd_derived
-    budget_usd_derived=$(python3 - "$budget" "$CONFIG_FILE" "$model" "$category" <<'PYEOF'
-import json, sys, os
-budget_npt, config_file, model, category = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
-
-if config_file and os.path.exists(config_file):
-    d = json.load(open(config_file))
-    cap = d.get('category_usd_cap', {}).get(category)
-    if cap is not None:
-        print(max(0.50, float(cap)))
-        sys.exit(0)
-    rate = d.get('model_rates', {}).get(model, {}).get('npt_usd', 0.000025)
-    overhead = d.get('nop_overhead_usd', 0.0)
-    print(max(0.50, budget_npt * rate + overhead))
-else:
-    print(max(0.50, budget_npt * 0.000025))
-PYEOF
-)
+    budget_usd_derived=$(python3 "$(dirname "$0")/lib/derive-budget-usd.py" \
+        "$budget" "$CONFIG_FILE" "$model" "$category")
 
     local output
     output=$(cd "$agent_dir" && claude -p "$prompt" \
