@@ -207,6 +207,54 @@ _init_scope_repo() {
     [ "$auto_count" -eq 0 ]
 }
 
+# ---------------------------------------------------------------------------
+# Budget enforcement — dispatcher must terminate the worker when NPT exceeds
+# budget_npt and record is_error in the CSV status column.
+# ---------------------------------------------------------------------------
+
+@test "--budget kills worker on NPT overrun and records error status" {
+    export MOCK_CLAUDE_MODE=budget_exceeded
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "budget enforcement test" \
+        --budget 1000 --category code --time-limit 30
+
+    [ "$status" -eq 0 ]
+    [ -f "$KIT_LOGS/dispatch-costs.csv" ]
+
+    local rows
+    rows=$(wc -l < "$KIT_LOGS/dispatch-costs.csv" | tr -d ' ')
+    [ "$rows" -eq 2 ]
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $NF); print $NF}')
+    [ "$status_field" = "error" ]
+}
+
+# ---------------------------------------------------------------------------
+# Time-limit enforcement — dispatcher must kill the slow worker within
+# time_limit seconds and produce a CSV row (not hang indefinitely).
+# ---------------------------------------------------------------------------
+
+@test "--time-limit kills slow worker and records error status" {
+    export MOCK_CLAUDE_MODE=slow
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "time-limit enforcement test" \
+        --budget 50000 --category code --time-limit 1
+
+    [ "$status" -eq 0 ]
+    [ -f "$KIT_LOGS/dispatch-costs.csv" ]
+
+    local rows
+    rows=$(wc -l < "$KIT_LOGS/dispatch-costs.csv" | tr -d ' ')
+    [ "$rows" -eq 2 ]
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $NF); print $NF}')
+    [ "$status_field" = "error" ]
+}
+
 @test "default branch name is agent/<id>/<task-id> when --branch-name omitted" {
     export MOCK_CLAUDE_MODE=happy
 

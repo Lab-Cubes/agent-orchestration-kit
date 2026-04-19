@@ -394,7 +394,7 @@ PYEOF
     fi
     local prompt="You are $agent_id. Read your CLAUDE.md for identity and protocol. Then use Bash to run 'ls $agent_dir/inbox/' to find tasks. There IS a task waiting: ${task_id}.intent.json — read it, claim via mv to $agent_dir/active/, execute, archive intent to $agent_dir/done/, write result.json to $agent_dir/done/.${branch_instruction}"
 
-    log "Launching worker: $agent_id (model: $model, budget: $budget NPT, max-turns: $max_turns)"
+    log "Launching worker: $agent_id (model: $model, budget: $budget NPT, time-limit: ${time_limit}s, max-turns: $max_turns)"
     local start_time end_time duration
     start_time=$(date +%s)
 
@@ -406,18 +406,115 @@ PYEOF
         done
     fi
 
-    # Dispatch. NPT budget is tracked post-hoc from the worker's token usage; the
-    # runtime governors are --max-turns and --time-limit. NPT cost is written to
-    # $COST_LOG after the worker returns.
+    # Dispatch with wall-clock and NPT budget enforcement.
+    # Runs claude with --output-format stream-json; accumulates per-turn token
+    # counts from assistant events and terminates the worker via SIGTERM when
+    # budget_npt or time_limit is reached. A threading.Timer handles wall-clock
+    # so blocked readline() calls are interrupted when the process is killed.
+    # Emits a single JSON line mirroring --output-format json so the parse
+    # block below needs no changes.
     local output
-    output=$(cd "$agent_dir" && claude -p "$prompt" \
-        --model "$model" \
-        --permission-mode dontAsk \
-        --allowedTools "Read,Edit,Write,Bash,Glob,Grep" \
-        --setting-sources "project,local" \
-        --max-turns "$max_turns" \
-        --output-format json \
-        $add_dirs 2>&1) || true
+    output=$(
+        cd "$agent_dir" && \
+        NPS_PROMPT="$prompt" \
+        NPS_MODEL="$model" \
+        NPS_MAX_TURNS="$max_turns" \
+        NPS_TIME_LIMIT="$time_limit" \
+        NPS_BUDGET="$budget" \
+        NPS_ADD_DIRS="$add_dirs" \
+        python3 - <<'PYEOF' 2>&1 || true
+import json, os, subprocess, threading
+
+prompt     = os.environ['NPS_PROMPT']
+model      = os.environ['NPS_MODEL']
+max_turns  = int(os.environ['NPS_MAX_TURNS'])
+time_limit = int(os.environ['NPS_TIME_LIMIT'])
+budget     = int(os.environ['NPS_BUDGET'])
+add_dirs   = os.environ.get('NPS_ADD_DIRS', '').split()
+
+cmd = [
+    'claude', '-p', prompt,
+    '--model', model,
+    '--permission-mode', 'dontAsk',
+    '--allowedTools', 'Read,Edit,Write,Bash,Glob,Grep',
+    '--setting-sources', 'project,local',
+    '--max-turns', str(max_turns),
+    '--output-format', 'stream-json',
+] + add_dirs
+
+proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                        text=True, bufsize=1)
+
+state = {'stop_reason': 'end_turn', 'accum_npt': 0}
+
+def _kill_on_deadline():
+    state['stop_reason'] = 'time_limit'
+    try:
+        proc.terminate()
+    except Exception:
+        pass
+
+timer = threading.Timer(time_limit, _kill_on_deadline)
+timer.start()
+
+events = []
+try:
+    for raw in proc.stdout:
+        line = raw.rstrip('\n')
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        events.append(event)
+        if event.get('type') == 'assistant':
+            u = (event.get('message') or {}).get('usage') or {}
+            state['accum_npt'] += (
+                (u.get('input_tokens') or 0)
+                + (u.get('output_tokens') or 0)
+                + (u.get('cache_read_input_tokens') or 0)
+            )
+            if state['accum_npt'] > budget and state['stop_reason'] == 'end_turn':
+                state['stop_reason'] = 'budget_exceeded'
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+finally:
+    timer.cancel()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+forced = state['stop_reason'] in ('time_limit', 'budget_exceeded')
+result_event = next((e for e in reversed(events) if e.get('type') == 'result'), None)
+
+if result_event and not forced:
+    u = result_event.get('usage') or {}
+    out = {
+        'result':             result_event.get('result', ''),
+        'usage':              u,
+        'num_turns':          result_event.get('num_turns', 0),
+        'stop_reason':        result_event.get('subtype', 'end_turn'),
+        'is_error':           result_event.get('is_error', False),
+        'permission_denials': result_event.get('permission_denials') or [],
+    }
+else:
+    u = (result_event or {}).get('usage') or {}
+    out = {
+        'result':             f"Worker terminated: {state['stop_reason']}",
+        'usage':              u if u else {'input_tokens': 0, 'output_tokens': state['accum_npt'], 'cache_read_input_tokens': 0},
+        'num_turns':          (result_event or {}).get('num_turns', 0),
+        'stop_reason':        state['stop_reason'],
+        'is_error':           True,
+        'permission_denials': [],
+    }
+print(json.dumps(out))
+PYEOF
+    )
 
     end_time=$(date +%s)
     duration=$((end_time - start_time))
@@ -498,7 +595,7 @@ result = {
     "payload": {
         "_nop": 1,
         "id": task_id,
-        "status": "completed" if status_val == "success" else "failed",
+        "status": "completed" if status_val == "success" else ("timeout" if stop == "time_limit" else "failed"),
         "from": f"urn:nps:agent:{issuer_domain}:{agent_id}",
         "picked_up_at": picked_up,
         "completed_at": completed,
@@ -526,9 +623,11 @@ PYEOF
         "$created_at" "$task_id" "$agent_id" "$model" "$category" "$priority" \
         "$budget" "$cost_npt" "$turns" "$duration" "$denials" "$status_val" >> "$COST_LOG"
 
-    # Hook: task completed or failed
+    # Hook: task completed, timed out, or failed
     if [[ "$status_val" == "success" ]]; then
         run_hook "task-completed" "$task_id" "$agent_id" "completed" "$cost_npt"
+    elif [[ "$stop_reason" == "time_limit" ]]; then
+        run_hook "task-failed" "$task_id" "$agent_id" "timeout" "$cost_npt"
     else
         run_hook "task-failed" "$task_id" "$agent_id" "failed" "$cost_npt"
     fi

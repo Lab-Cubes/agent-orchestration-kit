@@ -2,9 +2,12 @@
 # Mock Claude CLI — used by kits/agents/tests/ to avoid launching a real worker.
 #
 # Behaviour selector: MOCK_CLAUDE_MODE env var
-#   happy   (default) — exit 0, emit realistic JSON response on stdout
-#   timeout           — exit 1, "timed out" on stderr, no stdout JSON
-#   error             — exit 1, JSON with is_error=true on stdout
+#   happy          (default) — exit 0, emit realistic stream-json response
+#   timeout        — exit 1, "timed out" on stderr, no stdout JSON
+#   error          — exit 0, stream-json with is_error=true
+#   slow           — sleeps 10s before emitting anything (for time_limit tests)
+#   budget_exceeded — emits an assistant event reporting 5M tokens then sleeps
+#                    (dispatcher kills it once it reads the token count)
 #
 # If MOCK_CLAUDE_ARGS_FILE is set, all received args are appended there
 # so tests can assert which flags the spawner passed.
@@ -19,7 +22,8 @@ MODE="${MOCK_CLAUDE_MODE:-happy}"
 
 case "$MODE" in
     happy)
-        echo '{"result":"Mock worker completed task successfully.","usage":{"input_tokens":1234,"output_tokens":567,"cache_read_input_tokens":890},"num_turns":5,"permission_denials":[],"stop_reason":"end_turn","is_error":false,"total_cost_usd":0.0}'
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":1234,"output_tokens":567,"cache_creation_input_tokens":0,"cache_read_input_tokens":890}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":1000,"duration_api_ms":900,"num_turns":5,"result":"Mock worker completed task successfully.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":1234,"output_tokens":567,"cache_creation_input_tokens":0,"cache_read_input_tokens":890},"permission_denials":[]}\n'
         exit 0
         ;;
     timeout)
@@ -27,11 +31,22 @@ case "$MODE" in
         exit 1
         ;;
     error)
-        echo '{"result":"Mock error occurred during task execution.","usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":0},"num_turns":1,"permission_denials":[],"stop_reason":"error","is_error":true,"total_cost_usd":0.0}'
-        exit 1
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"error_during_execution","is_error":true,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"Mock error occurred during task execution.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
+    slow)
+        sleep 10
+        ;;
+    budget_exceeded)
+        # Report 5M input tokens in the first assistant event — any sane budget
+        # cap will be exceeded on reading this. The dispatcher sends SIGTERM and
+        # we never reach the sleep below.
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":5000000,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        sleep 10
         ;;
     *)
-        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error)" >&2
+        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded)" >&2
         exit 2
         ;;
 esac
