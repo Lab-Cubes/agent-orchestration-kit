@@ -356,31 +356,9 @@ PYEOF
         done
     fi
 
-    # Claude CLI's --max-budget-usd is the closest available kill-switch; we derive
-    # a USD ceiling from the NPT budget. Priority:
-    #   1. category_usd_cap from config (exact policy ceiling per category)
-    #   2. budget_npt * model_rates[model].npt_usd (NPT-derived, model-calibrated)
-    #   3. fallback: budget_npt * 0.000025 (Sonnet default)
-    # Rates: config.model_rates[model].npt_usd (Sonnet: $0.000025/NPT = $1.00/40K NPT).
-    local budget_usd_derived
-    budget_usd_derived=$(python3 - "$budget" "$CONFIG_FILE" "$model" "$category" <<'PYEOF'
-import json, sys, os
-budget_npt, config_file, model, category = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
-
-if config_file and os.path.exists(config_file):
-    d = json.load(open(config_file))
-    cap = d.get('category_usd_cap', {}).get(category)
-    if cap is not None:
-        print(max(0.50, float(cap)))
-        sys.exit(0)
-    rate = d.get('model_rates', {}).get(model, {}).get('npt_usd', 0.000025)
-    overhead = d.get('nop_overhead_usd', 0.0)
-    print(max(0.50, budget_npt * rate + overhead))
-else:
-    print(max(0.50, budget_npt * 0.000025))
-PYEOF
-)
-
+    # Dispatch. NPT budget is tracked post-hoc from the worker's token usage; the
+    # runtime governors are --max-turns and --time-limit. NPT cost is written to
+    # $COST_LOG after the worker returns.
     local output
     output=$(cd "$agent_dir" && claude -p "$prompt" \
         --model "$model" \
@@ -388,7 +366,6 @@ PYEOF
         --allowedTools "Read,Edit,Write,Bash,Glob,Grep" \
         --setting-sources "project,local" \
         --max-turns "$max_turns" \
-        --max-budget-usd "$budget_usd_derived" \
         --output-format json \
         $add_dirs 2>&1) || true
 
@@ -401,7 +378,6 @@ PYEOF
     clean_json=$(echo "$output" | grep '^{' | head -1)
 
     local result="NO JSON OUTPUT"
-    local cost_usd="0.0000"
     local cost_npt="0"
     local denials="0"
     local turns="0"
@@ -431,7 +407,6 @@ cost_npt_val = (
 )
 fields = [
     str(d.get('result', 'NO RESULT'))[:500].replace('\t', ' ').replace('\n', ' '),
-    f"{d.get('total_cost_usd', 0):.4f}",
     str(cost_npt_val),
     str(len(d.get('permission_denials') or [])),
     str(d.get('num_turns', 0)),
@@ -442,7 +417,7 @@ print('\t'.join(fields))
 PYEOF
         )
         if [[ -n "$parse_out" ]]; then
-            IFS=$'\t' read -r result cost_usd cost_npt denials turns stop_reason status_val <<< "$parse_out"
+            IFS=$'\t' read -r result cost_npt denials turns stop_reason status_val <<< "$parse_out"
         else
             result="PARSE ERROR"
             status_val="error"
@@ -451,7 +426,7 @@ PYEOF
         warn "No JSON found in worker output"
     fi
 
-    log "Worker finished in ${duration}s (cost: ${cost_npt} NPT / \$${cost_usd}, turns: $turns, denials: $denials)"
+    log "Worker finished in ${duration}s (cost: ${cost_npt} NPT, turns: $turns, denials: $denials)"
     log "Result: $result"
 
     # Fallback result.json if worker didn't write one
@@ -495,11 +470,11 @@ PYEOF
     # Append to cost log (CSV)
     mkdir -p "$(dirname "$COST_LOG")"
     if [[ ! -f "$COST_LOG" ]]; then
-        echo "timestamp,task_id,agent_id,model,category,priority,budget_npt,cost_npt,cost_usd_derived,turns,duration_s,denials,status" > "$COST_LOG"
+        echo "timestamp,task_id,agent_id,model,category,priority,budget_npt,cost_npt,turns,duration_s,denials,status" > "$COST_LOG"
     fi
-    printf '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"\n' \
+    printf '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"\n' \
         "$created_at" "$task_id" "$agent_id" "$model" "$category" "$priority" \
-        "$budget" "$cost_npt" "$cost_usd" "$turns" "$duration" "$denials" "$status_val" >> "$COST_LOG"
+        "$budget" "$cost_npt" "$turns" "$duration" "$denials" "$status_val" >> "$COST_LOG"
 
     # Hook: task completed or failed
     if [[ "$status_val" == "success" ]]; then
