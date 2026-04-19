@@ -1,0 +1,9 @@
+{
+  "adapter_id": "openclaw",
+  "adapter_version": "0.1.0",
+  "runtimes_supported": ["openclaw"],
+  "nop_version": "v0.2",
+  "preflight_supported": false,
+  "streaming_supported": false,
+  "cancel_supported": false
+}
