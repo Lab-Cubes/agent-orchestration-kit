@@ -19,21 +19,7 @@ MODE="${MOCK_CLAUDE_MODE:-happy}"
 
 case "$MODE" in
     happy)
-        cat <<'EOF'
-{
-  "result": "Mock worker completed task successfully.",
-  "usage": {
-    "input_tokens": 1234,
-    "output_tokens": 567,
-    "cache_read_input_tokens": 890
-  },
-  "num_turns": 5,
-  "permission_denials": [],
-  "stop_reason": "end_turn",
-  "is_error": false,
-  "total_cost_usd": 0.0
-}
-EOF
+        echo '{"result":"Mock worker completed task successfully.","usage":{"input_tokens":1234,"output_tokens":567,"cache_read_input_tokens":890},"num_turns":5,"permission_denials":[],"stop_reason":"end_turn","is_error":false,"total_cost_usd":0.0}'
         exit 0
         ;;
     timeout)
@@ -41,21 +27,7 @@ EOF
         exit 1
         ;;
     error)
-        cat <<'EOF'
-{
-  "result": "Mock error occurred during task execution.",
-  "usage": {
-    "input_tokens": 100,
-    "output_tokens": 10,
-    "cache_read_input_tokens": 0
-  },
-  "num_turns": 1,
-  "permission_denials": [],
-  "stop_reason": "error",
-  "is_error": true,
-  "total_cost_usd": 0.0
-}
-EOF
+        echo '{"result":"Mock error occurred during task execution.","usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":0},"num_turns":1,"permission_denials":[],"stop_reason":"error","is_error":true,"total_cost_usd":0.0}'
         exit 1
         ;;
     *)
