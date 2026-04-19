@@ -128,3 +128,42 @@ teardown() {
     status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $NF); print $NF}')
     [ -n "$status_field" ]
 }
+
+# ---------------------------------------------------------------------------
+# Dry-run must not mutate operator-visible state. Currently the intent file
+# is written to inbox/ before the dry-run branch is checked (bug #6), so a
+# subsequent real dispatch would pick up the stale intent. This test fails
+# against current main and should pass once bug #6 is fixed.
+# ---------------------------------------------------------------------------
+
+@test "--dry-run does not write intent file to the inbox" {
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "dry-run leak test" --dry-run --category code
+
+    [ "$status" -eq 0 ]
+
+    # The operator must still see the intent JSON on stdout (or somewhere
+    # non-mailbox) — dry-run's whole point is to preview.
+    echo "$output" | grep -q '"_ncp": 1'
+    echo "$output" | grep -q '"type": "intent"'
+
+    # But the mailbox must be untouched. Inbox, active, done, blocked all
+    # empty — a dry-run is not a dispatch.
+    local inbox_count active_count done_count blocked_count
+    inbox_count=$(ls "$KIT_AGENTS/coder-01/inbox/" 2>/dev/null | wc -l | tr -d ' ')
+    active_count=$(ls "$KIT_AGENTS/coder-01/active/" 2>/dev/null | wc -l | tr -d ' ')
+    done_count=$(ls "$KIT_AGENTS/coder-01/done/" 2>/dev/null | wc -l | tr -d ' ')
+    blocked_count=$(ls "$KIT_AGENTS/coder-01/blocked/" 2>/dev/null | wc -l | tr -d ' ')
+    [ "$inbox_count" -eq 0 ]
+    [ "$active_count" -eq 0 ]
+    [ "$done_count" -eq 0 ]
+    [ "$blocked_count" -eq 0 ]
+
+    # No CSV row either — dry-run is not a cost-logged event.
+    if [[ -f "$KIT_LOGS/dispatch-costs.csv" ]]; then
+        local rows
+        rows=$(wc -l < "$KIT_LOGS/dispatch-costs.csv" | tr -d ' ')
+        # Header only (0 or 1 line), no data row.
+        [ "$rows" -le 1 ]
+    fi
+}
