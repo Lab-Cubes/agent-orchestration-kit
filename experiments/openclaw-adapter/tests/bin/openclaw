@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Mock openclaw CLI — used in tests to avoid hitting a real OpenClaw gateway.
+#
+# Behaviour is controlled by the MOCK_OPENCLAW_MODE env var:
+#   happy    (default) — exits 0 with a minimal valid --json response on stdout
+#   timeout  — exits 1 with "timed out" text on stderr, no stdout
+#   failure  — exits 1 with generic error on stderr, no stdout
+#
+# All arguments are silently captured to MOCK_OPENCLAW_ARGS_FILE (if set).
+
+if [[ -n "${MOCK_OPENCLAW_ARGS_FILE:-}" ]]; then
+  echo "$@" >> "$MOCK_OPENCLAW_ARGS_FILE"
+fi
+
+MODE="${MOCK_OPENCLAW_MODE:-happy}"
+
+case "$MODE" in
+  happy)
+    cat <<'EOF'
+{
+  "runId": "aaaabbbb-1234-5678-abcd-000000000001",
+  "status": "ok",
+  "summary": "completed",
+  "result": {
+    "payloads": [
+      { "text": "mock agent reply", "mediaUrl": null }
+    ],
+    "meta": {
+      "durationMs": 1234,
+      "agentMeta": {
+        "sessionId": "sess-0000-1111-2222-3333",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 2,
+          "cacheWrite": 100,
+          "total": 117
+        },
+        "lastCallUsage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 2,
+          "cacheWrite": 100,
+          "total": 117
+        },
+        "promptTokens": 112
+      },
+      "aborted": false,
+      "stopReason": "stop"
+    }
+  }
+}
+EOF
+    exit 0
+    ;;
+  timeout)
+    echo "Gateway agent failed; falling back to embedded: GatewayClientRequestError: FallbackSummaryError: All models failed (3): anthropic/claude-sonnet-4-6: LLM request timed out. (timeout)" >&2
+    echo "[agent] embedded run timeout: agent turn exceeded deadline" >&2
+    exit 1
+    ;;
+  failure)
+    echo "openclaw: unexpected error during agent dispatch" >&2
+    exit 1
+    ;;
+  *)
+    echo "mock openclaw: unknown MOCK_OPENCLAW_MODE=${MODE}" >&2
+    exit 2
+    ;;
+esac
