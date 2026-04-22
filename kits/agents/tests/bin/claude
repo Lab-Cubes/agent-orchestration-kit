@@ -12,6 +12,9 @@
 #                    git commit there, then emits happy-path JSON. Used to prove
 #                    that a worker can commit to an outer repo when scope is a
 #                    non-git subdir with no worktree isolation.
+#   commit_to_add_dir — parses its own argv for the --add-dir value and commits
+#                    there. Used to verify post-fix isolation: the commit must
+#                    land on the worktree branch, not on the outer repo's HEAD.
 #
 # If MOCK_CLAUDE_ARGS_FILE is set, all received args are appended there
 # so tests can assert which flags the spawner passed.
@@ -62,8 +65,37 @@ case "$MODE" in
         printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"Committed to scope dir.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
         exit 0
         ;;
+    commit_to_add_dir)
+        # Post-fix isolation check: commit to the directory the dispatcher
+        # actually passed via --add-dir, which after the fix is the worktree
+        # subdir rather than the original outer-repo path. The commit lands
+        # on the worktree branch, not on the outer repo's HEAD.
+        commit_dir=""
+        prev_arg=""
+        for arg in "$@"; do
+            if [[ "$prev_arg" == "--add-dir" ]]; then
+                commit_dir="$arg"
+                break
+            fi
+            prev_arg="$arg"
+        done
+        if [[ -z "$commit_dir" ]]; then
+            echo "commit_to_add_dir: no --add-dir arg found in argv" >&2
+            exit 2
+        fi
+        mkdir -p "$commit_dir"
+        echo "scope-escape-content" > "$commit_dir/scope-escape.txt"
+        git -C "$commit_dir" add scope-escape.txt
+        git -C "$commit_dir" \
+            -c user.email=mock@test.local \
+            -c user.name="Mock Worker" \
+            commit -m "scope-escape-commit"
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"Committed to add-dir scope.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
     *)
-        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded)" >&2
+        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded|commit_to_scope|commit_to_add_dir)" >&2
         exit 2
         ;;
 esac
