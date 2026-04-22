@@ -8,6 +8,10 @@
 #   slow           — sleeps 10s before emitting anything (for time_limit tests)
 #   budget_exceeded — emits an assistant event reporting 5M tokens then sleeps
 #                    (dispatcher kills it once it reads the token count)
+#   commit_to_scope — writes a file into $MOCK_COMMIT_DIR and runs git add +
+#                    git commit there, then emits happy-path JSON. Used to prove
+#                    that a worker can commit to an outer repo when scope is a
+#                    non-git subdir with no worktree isolation.
 #
 # If MOCK_CLAUDE_ARGS_FILE is set, all received args are appended there
 # so tests can assert which flags the spawner passed.
@@ -44,6 +48,19 @@ case "$MODE" in
         # we never reach the sleep below.
         printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":5000000,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
         sleep 10
+        ;;
+    commit_to_scope)
+        # Prove the scope-escape attack: write a file into MOCK_COMMIT_DIR (a
+        # non-git subdir inside an outer git repo) and commit. git traverses
+        # parent dirs to find .git, so the commit lands on the outer repo's
+        # current branch. If this succeeds the vulnerability is real.
+        dir="${MOCK_COMMIT_DIR:?MOCK_COMMIT_DIR must be set for commit_to_scope mode}"
+        echo "scope-escape-content" > "$dir/scope-escape.txt"
+        git -C "$dir" add scope-escape.txt
+        git -C "$dir" commit -m "scope-escape-commit"
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"Committed to scope dir.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
         ;;
     *)
         echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded)" >&2
