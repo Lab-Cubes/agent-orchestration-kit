@@ -286,7 +286,12 @@ PYEOF
 
     if [[ -n "$scope" ]]; then
         local first_scope="${scope%%,*}"
-        if [[ -d "$first_scope/.git" || -f "$first_scope/.git" ]]; then
+        # Use rev-parse to detect whether first_scope is inside any git repo —
+        # not just a direct .git child. A scope of outer-repo/subdir has no
+        # .git entry of its own but is still inside a repo and must be isolated.
+        local git_root
+        git_root=$(git -C "$first_scope" rev-parse --show-toplevel 2>/dev/null || true)
+        if [[ -n "$git_root" ]]; then
             if [[ -z "$target_branch" ]]; then
                 target_branch=$(git -C "$first_scope" symbolic-ref --short HEAD 2>/dev/null || true)
                 if [[ -z "$target_branch" ]]; then
@@ -303,10 +308,28 @@ PYEOF
             mkdir -p "$NPS_WORKTREES_HOME"
             if ! $dry_run; then
                 log "Creating worktree: $worktree_path (branch: $branch_name)"
-                git -C "$first_scope" worktree add "$worktree_path" -b "$branch_name" 2>&1 \
+                git -C "$git_root" worktree add "$worktree_path" -b "$branch_name" 2>&1 \
                     || { err "Failed to create worktree"; exit 1; }
             fi
-            scope="${scope/$first_scope/$worktree_path}"
+            # Map scope to the equivalent subdir inside the worktree.
+            # --show-prefix returns "sub/dir/" relative to repo root (empty
+            # string when scope IS the root). Using a single git invocation
+            # keeps symlink handling consistent — no cd+pwd dance needed.
+            local relative_path
+            relative_path=$(git -C "$first_scope" rev-parse --show-prefix 2>/dev/null)
+            relative_path="${relative_path%/}"   # trim trailing /
+            local scope_in_worktree
+            if [[ -n "$relative_path" ]]; then
+                scope_in_worktree="$worktree_path/$relative_path"
+                # The subdir may not exist on the new branch yet — create it
+                # so the worker can operate there without an explicit mkdir.
+                if ! $dry_run; then
+                    mkdir -p "$scope_in_worktree"
+                fi
+            else
+                scope_in_worktree="$worktree_path"
+            fi
+            scope="${scope/$first_scope/$scope_in_worktree}"
         fi
     fi
 
