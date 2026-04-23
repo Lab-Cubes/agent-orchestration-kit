@@ -276,35 +276,77 @@ Dev mode uses domain `dev.localhost`. Production uses your org's registered doma
 
 ---
 
-## 8. NPT Approximation Formula
+## 8. NPT Formula and Budget Enforcement
 
 NPT (NPS Token) is the cross-model standardized unit from NPS-0 §4.3.
 
-**v0.1.0 approximation:** sum of all token counts reported by the agent runtime (e.g., Claude Code CLI output, OpenAI API `usage` field, etc.).
+### 8.1 Four-channel formula (v0.2.0)
+
+All four token channels reported by the runtime are counted, multiplied by the model-family exchange rate, and rounded up:
 
 ```
-NPT ≈ input_tokens + output_tokens + cache_read_tokens
+NPT = ceil((input_tokens + output_tokens + cache_read_input_tokens + cache_creation_input_tokens) × rate)
 ```
 
-Do not include cache_write_tokens — write overhead is not consumed compute.
+Exchange rates by model family (`config.json::npt_exchange_rates`; values below are the shipped defaults):
 
-### Per-model token rates (approximate, as of 2026-04-18)
+| Family    | Rate | Notes |
+|-----------|------|-------|
+| `claude`  | 1.05 | Context overhead per NPS-0 §4.3 |
+| `gpt`     | 1.0  | |
+| `gemini`  | 0.95 | |
+| `llama`   | 1.02 | |
+| `mistral` | 0.98 | |
+| `unknown` | 1.0  | Fallback for unrecognised families |
 
-| Model   | Input ($/MT) | Output ($/MT) | Cache read ($/MT) |
-|---------|-------------|---------------|-------------------|
-| haiku   | 0.80        | 4.00          | 0.08              |
-| sonnet  | 3.00        | 15.00         | 0.30              |
-| opus    | 15.00       | 75.00         | 1.50              |
+Model strings (`sonnet`, `haiku`, `opus`, full IDs such as `claude-sonnet-4-6`) are resolved to their family via `scripts/lib/calc_npt.py::detect_family`. Override the table via `config.json::npt_exchange_rates`.
 
-MT = million tokens. Use these to convert NPT budget to approximate USD ceiling.
+### 8.2 Soft cap and overshoot reporting
 
-USD estimate (for budget planning only):
+Enforcement fires at the **soft cap**, not the hard budget, giving the worker a margin to emit a final result:
 
 ```
-USD ≈ (input_tokens × input_rate + output_tokens × output_rate + cache_read_tokens × cache_rate) / 1_000_000
+soft_cap = ceil(budget_npt × soft_cap_ratio)   # default ratio: 0.90
 ```
 
-This is an approximation. Actual billing depends on Anthropic pricing at time of use.
+`soft_cap_ratio` is sourced from `config.json::default_soft_cap_ratio` (default `0.90`); override per-dispatch with `--soft-cap-ratio`. When the soft cap fires, `stop_reason` in the raw-output JSON is `soft_cap`.
+
+`dispatch-costs.csv` includes an `overshoot_ratio` column:
+
+```
+overshoot_ratio = round(cost_npt / budget_npt, 4)
+```
+
+### 8.3 Graceful shutdown ladder
+
+The signal sequence depends on which limit fires:
+
+| Trigger      | Signal sequence |
+|--------------|-----------------|
+| `soft_cap`   | SIGINT → wait(`grace_s`) → SIGTERM → wait(2 s) → SIGKILL |
+| `time_limit` | SIGTERM directly (hard wall-clock deadline; no grace period) |
+
+`grace_s` is sourced from `config.json::default_shutdown_grace_s` (default 15 s); override per-dispatch with `--shutdown-grace-s`. When `claude -p` receives SIGINT it emits a result event and exits 0. If the process exits within the grace window the result event flows through the normal result path (`forced = False`). If the grace window expires, escalation continues and the forced path applies.
+
+### 8.4 Forced-result token reporting
+
+When the forced path applies (worker terminated before completing, or grace window expired), the raw-output JSON shape is:
+
+```json
+{
+  "usage": {
+    "input_tokens":                <per-channel count accumulated across all assistant events>,
+    "output_tokens":               <per-channel count>,
+    "cache_read_input_tokens":     <per-channel count>,
+    "cache_creation_input_tokens": <per-channel count>
+  },
+  "_terminated_npt": <dispatcher-computed NPT total>,
+  "stop_reason":     "soft_cap" | "time_limit",
+  "is_error":        true
+}
+```
+
+`usage` holds real per-channel native counts — not a derived NPT total. The parse block uses `_terminated_npt` directly when present, skipping `calc_npt` to avoid double-counting.
 
 ---
 
@@ -327,6 +369,9 @@ Copy `config.example.json` to `config.json`. Edit before first use.
 | `default_model`               | string   | `sonnet`        | Model used when `constraints.model` is not set in intent.      |
 | `default_time_limit_s`        | integer  | `900`           | Wall-clock seconds before timeout. Hard stop.                  |
 | `default_max_turns`           | integer  | `100`           | Safety net turn count for the agent runtime CLI.               |
+| `default_shutdown_grace_s`    | integer  | `15`            | Seconds to wait for graceful exit after SIGINT (soft cap path). |
+| `default_soft_cap_ratio`      | number   | `0.90`          | Fraction of budget at which soft cap fires (0 < ratio ≤ 1).   |
+| `npt_exchange_rates`          | object   | see §8.1        | Per-family NPT multipliers. Keys are family names; `$`-prefixed keys are comments. |
 
 Env var overrides (set in `.env`):
 
