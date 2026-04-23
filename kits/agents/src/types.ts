@@ -61,7 +61,6 @@ export const STATE_DIRECTORY: Record<TaskState, string> = {
 export const FILE_EXTENSIONS = {
   intent: ".intent.json",
   result: ".result.json",
-  caps: ".caps.json",
 } as const;
 
 export const MAILBOX_DEFAULTS = {
@@ -69,5 +68,4 @@ export const MAILBOX_DEFAULTS = {
   done: "done",
   inbox: "inbox",
   blocked: "blocked",
-  registry: "registry",
 } as const;
