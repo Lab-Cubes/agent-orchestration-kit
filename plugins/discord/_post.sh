@@ -26,7 +26,7 @@ done < <(python3 - \
     "${NPS_TASK_ID:-unknown}" \
     "${NPS_COST_NPT:-0}" \
 <<'PYEOF'
-import json, sys, os
+import json, sys
 
 config_path, event, agent_id, task_id, cost_npt = sys.argv[1:]
 d = json.load(open(config_path))
@@ -40,13 +40,8 @@ account_name = worker_map.get(agent_id, 'default')
 # Resolve display name from accounts block
 accounts     = d.get('accounts', {})
 account_data = accounts.get(account_name) or accounts.get('default') or {}
-if isinstance(account_data, str):
-    # Legacy schema compat: accounts was {worker_id: display_name}
-    display_name = account_data
-    token = ''
-else:
-    display_name = account_data.get('display_name', account_name)
-    token        = account_data.get('token', '')
+display_name = account_data.get('display_name', account_name)
+token        = account_data.get('token', '')
 
 defaults = {
     'task_claimed':   '\U0001f528 {account} claimed {task_id}',
