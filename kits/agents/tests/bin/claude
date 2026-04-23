@@ -57,6 +57,60 @@ case "$MODE" in
         printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":5000000,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
         sleep 10
         ;;
+    cache_creation)
+        # Emits non-zero cache_creation_input_tokens — test (a) concern #1.
+        # input=1000, output=500, cache_creation=200, cache_read=0
+        # Expected after fix: ceil((1000+500+200+0) * 1.05) = 1785
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":1000,"output_tokens":500,"cache_creation_input_tokens":200,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":1000,"duration_api_ms":900,"num_turns":1,"result":"cache_creation task complete","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":1000,"output_tokens":500,"cache_creation_input_tokens":200,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
+    rate_check)
+        # Emits round-number tokens (native sum=1500) — test (b) concern #2.
+        # Expected after fix: ceil(1500 * 1.05) = 1575; today (no rate): 1500
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":1000,"output_tokens":500,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":1000,"duration_api_ms":900,"num_turns":1,"result":"rate_check task complete","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":1000,"output_tokens":500,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
+    sigint_handler)
+        # Emits 5M tokens to trigger the dispatcher's budget kill, then handles
+        # SIGINT by emitting a final result event — simulating real claude -p
+        # graceful response (probed 2026-04-23: responds to SIGINT with result
+        # event, exit 0). Used by test (d) concern #4.
+        #
+        # Uses 'exec python3' so the bash PID is replaced by python3. The
+        # dispatcher's proc.send_signal() hits python3 directly, where
+        # signal.signal(SIGINT, handler) is reliable. Bash trap+wait is NOT
+        # used: SIGTERM to bash during 'wait' defers exit until sleep finishes.
+        _tmppy=$(mktemp /tmp/mock-claude-sigintXXXXXX)
+        cat > "$_tmppy" << 'PYEOF'
+import signal, sys, json, time
+
+a = {'type': 'assistant', 'message': {'id': 'msg_mock', 'type': 'message',
+     'role': 'assistant', 'content': [], 'model': 'claude-sonnet-4-6',
+     'usage': {'input_tokens': 5000000, 'output_tokens': 0,
+               'cache_creation_input_tokens': 0, 'cache_read_input_tokens': 0}},
+     'session_id': 'mock'}
+sys.stdout.write(json.dumps(a) + '\n')
+sys.stdout.flush()
+
+def on_sigint(sig, frame):
+    r = {'type': 'result', 'subtype': 'success', 'is_error': False,
+         'duration_ms': 100, 'duration_api_ms': 100, 'num_turns': 1,
+         'result': 'SIGINT graceful shutdown', 'session_id': 'mock',
+         'total_cost_usd': 0.0,
+         'usage': {'input_tokens': 5000000, 'output_tokens': 0,
+                   'cache_creation_input_tokens': 0, 'cache_read_input_tokens': 0},
+         'permission_denials': []}
+    sys.stdout.write(json.dumps(r) + '\n')
+    sys.stdout.flush()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, on_sigint)
+time.sleep(30)
+PYEOF
+        exec python3 "$_tmppy"
+        ;;
     commit_to_scope)
         # Prove the scope-escape attack: write a file into MOCK_COMMIT_DIR (a
         # non-git subdir inside an outer git repo) and commit. git traverses
@@ -100,7 +154,7 @@ case "$MODE" in
         exit 0
         ;;
     *)
-        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded|commit_to_scope|commit_to_add_dir)" >&2
+        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|commit_to_scope|commit_to_add_dir)" >&2
         exit 2
         ;;
 esac

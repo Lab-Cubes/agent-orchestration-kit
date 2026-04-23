@@ -305,3 +305,151 @@ _init_scope_repo() {
     ! grep -qE "\./active/" "$MOCK_CLAUDE_ARGS_FILE"
     ! grep -qE "\./done/" "$MOCK_CLAUDE_ARGS_FILE"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #33 — NPT enforcement gaps (concerns #1–#5).
+#
+# Test labelling per plan:
+#   (a) bug-proving (RED)  — concern #1: cache_creation_input_tokens excluded
+#   (b) bug-proving (RED)  — concern #2: no 1.05× NPT exchange rate applied
+#   (c) bug-proving (RED)  — concern #3: no soft cap; overshoot_ratio column absent
+#   (d) bug-proving (RED)  — concern #4: SIGTERM kills worker; SIGINT trap never fires
+#   (e) bug-proving (RED)  — concern #5: forced-result stuffs accum_npt into output_tokens
+# ---------------------------------------------------------------------------
+
+# (a) bug-proving — RED until concern #1 fix lands
+# cache_creation mode: input=1000, output=500, cache_creation=200, cache_read=0
+# Today (3-channel, no rate): 1000+500+0 = 1500
+# After fix (4-channel + 1.05×): ceil((1000+500+200+0) * 1.05) = 1785
+@test "#33(a) cost_npt counts cache_creation_input_tokens" {
+    export MOCK_CLAUDE_MODE=cache_creation
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "cache_creation npt test" \
+        --budget 50000 --category code --time-limit 30
+
+    [ "$status" -eq 0 ]
+
+    local row cost_npt_field
+    row=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv")
+    cost_npt_field=$(echo "$row" | awk -F',' '{gsub(/"/, "", $8); print $8}')
+
+    [ "$cost_npt_field" = "1785" ]
+}
+
+# (b) bug-proving — RED until concern #2 fix lands
+# rate_check mode: input=1000, output=500, cache_creation=0, cache_read=0
+# Today (no rate): 1500
+# After fix (1.05× Claude rate): ceil(1500 * 1.05) = ceil(1575) = 1575
+@test "#33(b) cost_npt applies 1.05x NPT exchange rate for claude model family" {
+    export MOCK_CLAUDE_MODE=rate_check
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "exchange rate npt test" \
+        --budget 50000 --category code --time-limit 30
+
+    [ "$status" -eq 0 ]
+
+    local row cost_npt_field
+    row=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv")
+    cost_npt_field=$(echo "$row" | awk -F',' '{gsub(/"/, "", $8); print $8}')
+
+    [ "$cost_npt_field" = "1575" ]
+}
+
+# (c) bug-proving — RED until concern #3 fix lands
+# Note: mock token count is native; soft cap compares post-rate NPT.
+# budget_exceeded emits 5M native tokens; with budget=1000, soft_cap=900 NPT.
+# Today: hard-cap check only, no soft_cap stop_reason, no overshoot_ratio column.
+# After fix: soft_cap fires at 900 NPT (well below 5M*1.05), overshoot_ratio logged.
+@test "#33(c) CSV has overshoot_ratio column and stop_reason reflects soft cap" {
+    export MOCK_CLAUDE_MODE=budget_exceeded
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "soft cap test" \
+        --budget 1000 --category code --time-limit 30
+
+    [ "$status" -eq 0 ]
+
+    local header
+    header=$(head -n1 "$KIT_LOGS/dispatch-costs.csv")
+    echo "$header" | grep -q "overshoot_ratio"
+
+    local raw_file
+    raw_file=$(ls "$KIT_AGENTS/coder-01/done/"*.raw-output.json 2>/dev/null | head -1)
+    [ -f "$raw_file" ]
+
+    run python3 -c "
+import json, sys
+d = json.load(open('$raw_file'))
+assert d.get('stop_reason') == 'soft_cap', \
+    f'expected stop_reason=soft_cap, got {d.get(\"stop_reason\")!r}'
+print('ok')
+"
+    [ "$status" -eq 0 ]
+}
+
+# (d) bug-proving — RED until concern #4 fix lands
+# sigint_handler mock: emits 5M tokens (triggers kill), traps SIGINT, emits
+# result event "SIGINT graceful shutdown". Today dispatcher sends SIGTERM →
+# mock's INT trap never fires → forced path → result = "Worker terminated: ...".
+# After fix (SIGINT-first ladder): INT trap fires → result event collected →
+# raw-output result = "SIGINT graceful shutdown".
+@test "#33(d) graceful SIGINT shutdown uses worker result event over forced path" {
+    export MOCK_CLAUDE_MODE=sigint_handler
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "sigint grace test" \
+        --budget 1000 --category code --time-limit 30
+
+    [ "$status" -eq 0 ]
+
+    local raw_file
+    raw_file=$(ls "$KIT_AGENTS/coder-01/done/"*.raw-output.json 2>/dev/null | head -1)
+    [ -f "$raw_file" ]
+
+    run python3 -c "
+import json, sys
+d = json.load(open('$raw_file'))
+assert d.get('result') == 'SIGINT graceful shutdown', \
+    f'expected SIGINT graceful shutdown, got {d.get(\"result\")!r}'
+print('ok')
+"
+    [ "$status" -eq 0 ]
+}
+
+# (e) bug-proving — RED until concern #5 fix lands
+# budget_exceeded: input=5M, output=0, cache_creation=0, cache_read=0
+# Today forced-result: usage={input:0, output:5000000, cache_read:0}
+#   (accum_npt stuffed into output_tokens; cache_creation absent)
+# After fix: usage={input:5000000, output:0, cache_read:0, cache_creation:0}
+#   + _terminated_npt field present
+@test "#33(e) forced-result usage preserves per-channel native counts" {
+    export MOCK_CLAUDE_MODE=budget_exceeded
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "forced channels test" \
+        --budget 1000 --category code --time-limit 30
+
+    [ "$status" -eq 0 ]
+
+    local raw_file
+    raw_file=$(ls "$KIT_AGENTS/coder-01/done/"*.raw-output.json 2>/dev/null | head -1)
+    [ -f "$raw_file" ]
+
+    run python3 -c "
+import json, sys
+d = json.load(open('$raw_file'))
+u = d.get('usage', {})
+assert 'cache_creation_input_tokens' in u, \
+    f'usage missing cache_creation_input_tokens: {u}'
+assert '_terminated_npt' in d, \
+    f'missing _terminated_npt field: {list(d.keys())}'
+assert u.get('input_tokens') == 5000000, \
+    f'input_tokens should be 5000000, got {u.get(\"input_tokens\")}'
+assert u.get('output_tokens') == 0, \
+    f'output_tokens should be 0 (not accum_npt), got {u.get(\"output_tokens\")}'
+print('ok')
+"
+    [ "$status" -eq 0 ]
+}
