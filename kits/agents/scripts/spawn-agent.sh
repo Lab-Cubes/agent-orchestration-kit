@@ -224,6 +224,11 @@ cmd_dispatch() {
     local intent_text="$1"
     shift
 
+    if ! claude --help 2>&1 | grep -q -- '--setting-sources'; then
+        err "claude CLI missing required --setting-sources flag — upgrade Claude Code CLI"
+        exit 1
+    fi
+
     local agent_dir="$NPS_AGENTS_HOME/$agent_id"
     local max_turns="$DEFAULT_MAX_TURNS"
     local time_limit="$DEFAULT_TIME_LIMIT"
