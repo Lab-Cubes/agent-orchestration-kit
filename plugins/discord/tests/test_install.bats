@@ -151,8 +151,9 @@ teardown() {
     [ -L "$MOCK_KIT_HOOKS/config.json" ]
 
     # Must resolve to the plugin's config.json
-    resolved="$(readlink "$MOCK_KIT_HOOKS/config.json")"
-    [ "$resolved" = "$MOCK_PLUGIN_DIR/config.json" ]
+    resolved="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$MOCK_KIT_HOOKS/config.json")"
+    expected="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$MOCK_PLUGIN_DIR/config.json")"
+    [ "$resolved" = "$expected" ]
 }
 
 @test "uninstall removes config.json symlink but preserves source config.json" {
