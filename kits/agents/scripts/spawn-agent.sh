@@ -758,6 +758,14 @@ PYEOF
 
     if [[ -z "$branch" || -z "$original_scope" ]]; then err "Invalid branch metadata"; exit 1; fi
 
+    git -C "$original_scope" config user.name > /dev/null 2>&1 && \
+        git -C "$original_scope" config user.email > /dev/null 2>&1 || {
+        err "git user.name and user.email must be configured before merging"
+        err "  git config --global user.name 'Your Name'"
+        err "  git config --global user.email 'you@example.com'"
+        exit 1
+    }
+
     log "Merging $task_id from $branch into $target_branch"
     echo ""; echo "Commits:"; git -C "$original_scope" log --oneline "$target_branch..$branch" 2>/dev/null || true
     echo ""; echo "Files:"; git -C "$original_scope" diff --stat "$target_branch..$branch" 2>/dev/null || true; echo ""
