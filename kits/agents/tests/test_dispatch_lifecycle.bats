@@ -125,7 +125,7 @@ teardown() {
 
     # Status column (last field) should be "error" or "success" — not empty.
     local status_field
-    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $NF); print $NF}')
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
     [ -n "$status_field" ]
 }
 
@@ -227,7 +227,7 @@ _init_scope_repo() {
     [ "$rows" -eq 2 ]
 
     local status_field
-    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $NF); print $NF}')
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
     [ "$status_field" = "error" ]
 }
 
@@ -251,7 +251,7 @@ _init_scope_repo() {
     [ "$rows" -eq 2 ]
 
     local status_field
-    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $NF); print $NF}')
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
     [ "$status_field" = "error" ]
 }
 

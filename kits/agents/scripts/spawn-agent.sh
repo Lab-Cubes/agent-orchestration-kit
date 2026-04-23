@@ -244,6 +244,7 @@ cmd_dispatch() {
     local max_turns="$DEFAULT_MAX_TURNS"
     local time_limit="$DEFAULT_TIME_LIMIT"
     local budget=""
+    local soft_cap_ratio="$DEFAULT_SOFT_CAP_RATIO"
     local model="$DEFAULT_MODEL"
     local scope=""
     local priority="normal"
@@ -270,8 +271,9 @@ PYEOF
         case "$1" in
             --max-turns)     max_turns="$2"; shift 2 ;;
             --time-limit)    time_limit="$2"; shift 2 ;;
-            --budget)        budget="$2"; shift 2 ;;
-            --model)         model="$2"; shift 2 ;;
+            --budget)          budget="$2"; shift 2 ;;
+            --soft-cap-ratio)  soft_cap_ratio="$2"; shift 2 ;;
+            --model)           model="$2"; shift 2 ;;
             --scope)         scope="$2"; shift 2 ;;
             --priority)      priority="$2"; shift 2 ;;
             --category)      category="$2"; shift 2 ;;
@@ -457,6 +459,7 @@ PYEOF
         cd "$agent_dir" && \
         NPS_DIR="$NPS_DIR" \
         NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" \
+        NPS_SOFT_CAP_RATIO="$soft_cap_ratio" \
         NPS_PROMPT="$prompt" \
         NPS_MODEL="$model" \
         NPS_MAX_TURNS="$max_turns" \
@@ -464,18 +467,20 @@ PYEOF
         NPS_BUDGET="$budget" \
         NPS_ADD_DIRS="$add_dirs" \
         python3 - <<'PYEOF' 2>&1 || true
-import json, os, subprocess, sys, threading
+import json, math, os, subprocess, sys, threading
 sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
 from calc_npt import calc_npt, detect_family
 
-prompt       = os.environ['NPS_PROMPT']
-model        = os.environ['NPS_MODEL']
-max_turns    = int(os.environ['NPS_MAX_TURNS'])
-time_limit   = int(os.environ['NPS_TIME_LIMIT'])
-budget       = int(os.environ['NPS_BUDGET'])
-add_dirs     = os.environ.get('NPS_ADD_DIRS', '').split()
-rates        = json.loads(os.environ.get('NPS_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
-model_family = detect_family(model)
+prompt          = os.environ['NPS_PROMPT']
+model           = os.environ['NPS_MODEL']
+max_turns       = int(os.environ['NPS_MAX_TURNS'])
+time_limit      = int(os.environ['NPS_TIME_LIMIT'])
+budget          = int(os.environ['NPS_BUDGET'])
+soft_cap_ratio  = float(os.environ.get('NPS_SOFT_CAP_RATIO', '0.9'))
+soft_cap        = math.ceil(budget * soft_cap_ratio)
+add_dirs        = os.environ.get('NPS_ADD_DIRS', '').split()
+rates           = json.loads(os.environ.get('NPS_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
+model_family    = detect_family(model)
 
 cmd = [
     'claude', '-p', prompt,
@@ -516,8 +521,8 @@ try:
         if event.get('type') == 'assistant':
             u = (event.get('message') or {}).get('usage') or {}
             state['accum_npt'] += calc_npt(u, model_family, rates)
-            if state['accum_npt'] > budget and state['stop_reason'] == 'end_turn':
-                state['stop_reason'] = 'budget_exceeded'
+            if state['accum_npt'] >= soft_cap and state['stop_reason'] == 'end_turn':
+                state['stop_reason'] = 'soft_cap'
                 try:
                     proc.terminate()
                 except Exception:
@@ -530,7 +535,7 @@ finally:
         proc.kill()
         proc.wait()
 
-forced = state['stop_reason'] in ('time_limit', 'budget_exceeded')
+forced = state['stop_reason'] in ('time_limit', 'soft_cap')
 result_event = next((e for e in reversed(events) if e.get('type') == 'result'), None)
 
 if result_event and not forced:
@@ -611,6 +616,11 @@ PYEOF
         warn "No JSON found in worker output"
     fi
 
+    local overshoot_ratio="0.0"
+    if [[ "$budget" -gt 0 ]] && [[ "$cost_npt" =~ ^[0-9]+$ ]]; then
+        overshoot_ratio=$(python3 -c "print(round($cost_npt / $budget, 4))")
+    fi
+
     log "Worker finished in ${duration}s (cost: ${cost_npt} NPT, turns: $turns, denials: $denials)"
     log "Result: $result"
 
@@ -655,11 +665,11 @@ PYEOF
     # Append to cost log (CSV)
     mkdir -p "$(dirname "$COST_LOG")"
     if [[ ! -f "$COST_LOG" ]]; then
-        echo "timestamp,task_id,agent_id,model,category,priority,budget_npt,cost_npt,turns,duration_s,denials,status" > "$COST_LOG"
+        echo "timestamp,task_id,agent_id,model,category,priority,budget_npt,cost_npt,turns,duration_s,denials,status,overshoot_ratio" > "$COST_LOG"
     fi
-    printf '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"\n' \
+    printf '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"\n' \
         "$created_at" "$task_id" "$agent_id" "$model" "$category" "$priority" \
-        "$budget" "$cost_npt" "$turns" "$duration" "$denials" "$status_val" >> "$COST_LOG"
+        "$budget" "$cost_npt" "$turns" "$duration" "$denials" "$status_val" "$overshoot_ratio" >> "$COST_LOG"
 
     # Hook: task completed, timed out, or failed
     if [[ "$status_val" == "success" ]]; then
