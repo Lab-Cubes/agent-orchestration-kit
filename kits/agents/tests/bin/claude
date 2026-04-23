@@ -21,6 +21,11 @@
 
 set -u
 
+if [[ "${1:-}" == "--help" ]]; then
+    echo "--setting-sources <sources>   Comma-separated list of setting sources to load"
+    exit 0
+fi
+
 if [[ -n "${MOCK_CLAUDE_ARGS_FILE:-}" ]]; then
     echo "$@" >> "$MOCK_CLAUDE_ARGS_FILE"
 fi
