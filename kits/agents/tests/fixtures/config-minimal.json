@@ -14,6 +14,7 @@
   "default_model": "sonnet",
   "default_time_limit_s": 900,
   "default_max_turns": 100,
+  "default_shutdown_grace_s": 15,
   "default_soft_cap_ratio": 0.90,
   "npt_exchange_rates": {
     "claude": 1.05,

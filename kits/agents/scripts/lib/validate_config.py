@@ -24,6 +24,7 @@ def validate(config):
     _check_positive_int(config, 'default_budget_npt', errors)
     _check_positive_int(config, 'default_time_limit_s', errors)
     _check_positive_int(config, 'default_max_turns', errors)
+    _check_positive_int(config, 'default_shutdown_grace_s', errors)
 
     cbn = config.get('category_budget_npt')
     if cbn is not None:
