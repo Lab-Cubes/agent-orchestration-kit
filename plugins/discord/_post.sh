@@ -85,9 +85,28 @@ PYEOF
 # Safe fallback — empty credentials = suppress silently.
 [[ -z "${CHANNEL:-}" || -z "${TOKEN:-}" ]] && exit 0
 
-curl -s -X POST "https://discord.com/api/v10/channels/$CHANNEL/messages" \
-    -H "Authorization: Bot $TOKEN" \
-    -H "Content-Type: application/json" \
-    -H "User-Agent: DiscordBot (https://github.com/Lab-Cubes/agent-orchestration-kit, 1.0)" \
-    -d "$(python3 -c "import json,sys; print(json.dumps({'content':sys.argv[1]}))" "$MESSAGE")" \
-    > /dev/null || true
+attempt=0
+max_retries=2
+while [[ $attempt -le $max_retries ]]; do
+    body_file=$(mktemp)
+    http_code=$(curl -s -o "$body_file" -w "%{http_code}" -X POST \
+        "https://discord.com/api/v10/channels/$CHANNEL/messages" \
+        -H "Authorization: Bot $TOKEN" \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: DiscordBot (https://github.com/Lab-Cubes/agent-orchestration-kit, 1.0)" \
+        -d "$(python3 -c "import json,sys; print(json.dumps({'content':sys.argv[1]}))" "$MESSAGE")" \
+        || echo 000)
+
+    if [[ "$http_code" == "429" ]]; then
+        retry_after=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('retry_after', 1))" "$body_file" 2>/dev/null || echo 1)
+        rm -f "$body_file"
+        attempt=$((attempt + 1))
+        if [[ $attempt -le $max_retries ]]; then
+            sleep "$retry_after"
+            continue
+        fi
+    fi
+    rm -f "$body_file"
+    break
+done
+exit 0
