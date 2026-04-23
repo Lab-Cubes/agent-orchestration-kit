@@ -48,26 +48,6 @@ else:
     display_name = account_data.get('display_name', account_name)
     token        = account_data.get('token', '')
 
-# token_from_openclaw: read token from openclaw.json at runtime if configured
-openclaw_path = d.get('token_from_openclaw', '')
-if not token and openclaw_path and os.path.exists(openclaw_path):
-    try:
-        ocd = json.load(open(openclaw_path))
-        token = (ocd.get('channels', {})
-                    .get('discord', {})
-                    .get('accounts', {})
-                    .get(account_name, {})
-                    .get('token', ''))
-        # Fall back to 'default' account token if named account not found
-        if not token:
-            token = (ocd.get('channels', {})
-                        .get('discord', {})
-                        .get('accounts', {})
-                        .get('default', {})
-                        .get('token', ''))
-    except (json.JSONDecodeError, OSError):
-        pass
-
 defaults = {
     'task_claimed':   '\U0001f528 {account} claimed {task_id}',
     'task_completed': '\u2705 {account} completed {task_id} ({cost_npt} NPT)',

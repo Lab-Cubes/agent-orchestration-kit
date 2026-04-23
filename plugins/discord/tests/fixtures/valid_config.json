@@ -7,7 +7,6 @@
   "worker_map": {
     "coder-01": "coder1"
   },
-  "token_from_openclaw": "",
   "messages": {
     "task_claimed":   "\ud83d\udd28 {account} claimed {task_id}",
     "task_completed": "\u2705 {account} completed {task_id} ({cost_npt} NPT)",
