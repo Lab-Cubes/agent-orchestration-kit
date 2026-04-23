@@ -74,6 +74,7 @@ DEFAULT_MODEL="sonnet"
 DEFAULT_TIME_LIMIT=900
 DEFAULT_MAX_TURNS=100
 DEFAULT_BUDGET_NPT=20000
+DEFAULT_SHUTDOWN_GRACE_S=15
 DEFAULT_SOFT_CAP_RATIO=0.9
 NPT_EXCHANGE_RATES_JSON='{"unknown":1.0}'
 
@@ -96,6 +97,7 @@ print(f"DEFAULT_MODEL={d.get('default_model', 'sonnet')}")
 print(f"DEFAULT_TIME_LIMIT={d.get('default_time_limit_s', 900)}")
 print(f"DEFAULT_MAX_TURNS={d.get('default_max_turns', 100)}")
 print(f"DEFAULT_BUDGET_NPT={d.get('default_budget_npt', 40000)}")
+print(f"DEFAULT_SHUTDOWN_GRACE_S={d.get('default_shutdown_grace_s', 15)}")
 print(f"DEFAULT_SOFT_CAP_RATIO={d.get('default_soft_cap_ratio', 0.9)}")
 _raw = d.get('npt_exchange_rates') or dict()
 _rates = dict((k, v) for k, v in _raw.items() if not k.startswith('$'))
@@ -244,6 +246,7 @@ cmd_dispatch() {
     local max_turns="$DEFAULT_MAX_TURNS"
     local time_limit="$DEFAULT_TIME_LIMIT"
     local budget=""
+    local shutdown_grace_s="$DEFAULT_SHUTDOWN_GRACE_S"
     local soft_cap_ratio="$DEFAULT_SOFT_CAP_RATIO"
     local model="$DEFAULT_MODEL"
     local scope=""
@@ -272,7 +275,8 @@ PYEOF
             --max-turns)     max_turns="$2"; shift 2 ;;
             --time-limit)    time_limit="$2"; shift 2 ;;
             --budget)          budget="$2"; shift 2 ;;
-            --soft-cap-ratio)  soft_cap_ratio="$2"; shift 2 ;;
+            --shutdown-grace-s) shutdown_grace_s="$2"; shift 2 ;;
+            --soft-cap-ratio)   soft_cap_ratio="$2"; shift 2 ;;
             --model)           model="$2"; shift 2 ;;
             --scope)         scope="$2"; shift 2 ;;
             --priority)      priority="$2"; shift 2 ;;
@@ -459,6 +463,7 @@ PYEOF
         cd "$agent_dir" && \
         NPS_DIR="$NPS_DIR" \
         NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" \
+        NPS_SHUTDOWN_GRACE_S="$shutdown_grace_s" \
         NPS_SOFT_CAP_RATIO="$soft_cap_ratio" \
         NPS_PROMPT="$prompt" \
         NPS_MODEL="$model" \
@@ -467,7 +472,7 @@ PYEOF
         NPS_BUDGET="$budget" \
         NPS_ADD_DIRS="$add_dirs" \
         python3 - <<'PYEOF' 2>&1 || true
-import json, math, os, subprocess, sys, threading
+import json, math, os, signal, subprocess, sys, threading
 sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
 from calc_npt import calc_npt, detect_family
 
@@ -476,6 +481,7 @@ model           = os.environ['NPS_MODEL']
 max_turns       = int(os.environ['NPS_MAX_TURNS'])
 time_limit      = int(os.environ['NPS_TIME_LIMIT'])
 budget          = int(os.environ['NPS_BUDGET'])
+grace_s         = int(os.environ.get('NPS_SHUTDOWN_GRACE_S', '15'))
 soft_cap_ratio  = float(os.environ.get('NPS_SOFT_CAP_RATIO', '0.9'))
 soft_cap        = math.ceil(budget * soft_cap_ratio)
 add_dirs        = os.environ.get('NPS_ADD_DIRS', '').split()
@@ -495,7 +501,7 @@ cmd = [
 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                         text=True, bufsize=1)
 
-state = {'stop_reason': 'end_turn', 'accum_npt': 0}
+state = {'stop_reason': 'end_turn', 'accum_npt': 0, 'graceful_exit': False}
 
 def _kill_on_deadline():
     state['stop_reason'] = 'time_limit'
@@ -524,18 +530,34 @@ try:
             if state['accum_npt'] >= soft_cap and state['stop_reason'] == 'end_turn':
                 state['stop_reason'] = 'soft_cap'
                 try:
-                    proc.terminate()
+                    proc.send_signal(signal.SIGINT)
                 except Exception:
                     pass
 finally:
     timer.cancel()
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait()
+    if state['stop_reason'] == 'soft_cap':
+        try:
+            proc.wait(timeout=grace_s)
+            state['graceful_exit'] = True
+        except subprocess.TimeoutExpired:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+    else:
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
-forced = state['stop_reason'] in ('time_limit', 'soft_cap')
+forced = state['stop_reason'] == 'time_limit' or \
+         (state['stop_reason'] == 'soft_cap' and not state['graceful_exit'])
 result_event = next((e for e in reversed(events) if e.get('type') == 'result'), None)
 
 if result_event and not forced:

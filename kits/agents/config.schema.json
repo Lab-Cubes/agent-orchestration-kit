@@ -15,6 +15,7 @@
     "default_model": {"type": "string"},
     "default_time_limit_s": {"type": "integer", "minimum": 1},
     "default_max_turns": {"type": "integer", "minimum": 1},
+    "default_shutdown_grace_s": {"type": "integer", "minimum": 1},
     "default_soft_cap_ratio": {"type": "number", "exclusiveMinimum": 0, "maximum": 1.0},
     "npt_exchange_rates": {
       "type": "object",
