@@ -1,3 +1,45 @@
 #!/usr/bin/env bash
-# Mock curl — captures all args to a file, exits 0. Never calls the real Discord API.
+# Mock curl — enhanced to simulate HTTP statuses and capture invocation counts.
+# Backward-compatible: MOCK_CURL_SCRIPT unset + no -o/-w behaves as original.
+
 echo "$@" >> "${CURL_ARGS_FILE:-/tmp/mock_curl_args_$$}"
+
+count_file="${CURL_COUNT_FILE:-/tmp/mock_curl_count_$$}"
+count=$(cat "$count_file" 2>/dev/null || echo 0)
+echo $((count + 1)) > "$count_file"
+
+if [[ -n "${MOCK_CURL_SCRIPT:-}" ]]; then
+    IFS=',' read -ra statuses <<< "$MOCK_CURL_SCRIPT"
+    last_idx=$((${#statuses[@]} - 1))
+    if [[ $count -lt ${#statuses[@]} ]]; then
+        http_status="${statuses[$count]}"
+    else
+        http_status="${statuses[$last_idx]}"
+    fi
+else
+    http_status=200
+fi
+
+body_file=""
+write_format=""
+prev=""
+for arg in "$@"; do
+    if [[ "$prev" == "-o" ]]; then
+        body_file="$arg"
+    elif [[ "$prev" == "-w" ]]; then
+        write_format="$arg"
+    fi
+    prev="$arg"
+done
+
+if [[ -n "$body_file" ]]; then
+    if [[ "$http_status" == "429" ]]; then
+        echo "{\"message\":\"You are being rate limited.\",\"retry_after\":${MOCK_CURL_429_RETRY_AFTER:-0.1},\"global\":false}" > "$body_file"
+    else
+        echo "{}" > "$body_file"
+    fi
+fi
+
+if [[ -n "$write_format" ]] && [[ "$write_format" == *'%{http_code}'* ]]; then
+    printf '%s' "$http_status"
+fi
