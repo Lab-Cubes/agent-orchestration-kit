@@ -9,11 +9,6 @@ Zero coupling to the core kit — installs 3 hook scripts + `_post.sh` + a symli
 to `config.json` into `kits/agents/hooks/`, reads its own config, runs only when
 events fire. Uninstall is `rm` the hook files.
 
-**Optional convenience:** if you already store bot tokens in an `openclaw.json`
-file, set `token_from_openclaw` to read tokens from there and avoid duplicating
-secrets. This is entirely optional — the plugin works standalone with tokens
-in `config.json`.
-
 ## Prerequisites
 
 - curl — used to POST messages to the Discord API. Pre-installed on macOS and most Linux distros. Windows users: use Git Bash (includes curl) or WSL. To install manually: `brew install curl` (macOS) / `apt install curl` (Debian/Ubuntu).
@@ -59,28 +54,6 @@ Next agent dispatch will post to Discord.
 | `channel_id` | Discord channel where messages post. Get from Discord client → right-click channel → Copy Channel ID (Developer Mode) |
 | `accounts` | Map of account name → `{ token, display_name }`. Each account is a separate Discord bot. `default` is the fallback when no worker_map entry matches |
 | `worker_map` | Map of NOP worker ID → account name. Workers not listed fall back to `default` |
-
-### Token from openclaw.json (avoid duplicating secrets)
-
-If you already store bot tokens in `openclaw.json`, set `token_from_openclaw` instead of
-copying tokens into `config.json`:
-
-```json
-{
-  "channel_id": "123456789012345678",
-  "token_from_openclaw": "/path/to/openclaw.json",
-  "worker_map": {
-    "coder-01":     "coder1",
-    "coder-02":     "coder2",
-    "critic-01":    "critic",
-    "researcher-01":"researcher"
-  }
-}
-```
-
-Tokens are read at runtime from `channels.discord.accounts.{account_name}.token` in the
-openclaw.json file. Worker display names still come from `accounts[account_name].display_name`
-if set, or fall back to the account name.
 
 ## Events
 
