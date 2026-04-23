@@ -74,6 +74,8 @@ DEFAULT_MODEL="sonnet"
 DEFAULT_TIME_LIMIT=900
 DEFAULT_MAX_TURNS=100
 DEFAULT_BUDGET_NPT=20000
+DEFAULT_SOFT_CAP_RATIO=0.9
+NPT_EXCHANGE_RATES_JSON='{"unknown":1.0}'
 
 if [[ -f "$CONFIG_FILE" ]]; then
     if ! python3 "$NPS_DIR/scripts/lib/validate_config.py" "$CONFIG_FILE" >&2; then
@@ -94,6 +96,11 @@ print(f"DEFAULT_MODEL={d.get('default_model', 'sonnet')}")
 print(f"DEFAULT_TIME_LIMIT={d.get('default_time_limit_s', 900)}")
 print(f"DEFAULT_MAX_TURNS={d.get('default_max_turns', 100)}")
 print(f"DEFAULT_BUDGET_NPT={d.get('default_budget_npt', 40000)}")
+print(f"DEFAULT_SOFT_CAP_RATIO={d.get('default_soft_cap_ratio', 0.9)}")
+_raw = d.get('npt_exchange_rates') or dict()
+_rates = dict((k, v) for k, v in _raw.items() if not k.startswith('$'))
+_fallback = dict((('unknown', 1.0),))
+print(f"NPT_EXCHANGE_RATES_JSON={json.dumps(_rates or _fallback)}")
 PYEOF
 )
 fi
@@ -448,6 +455,8 @@ PYEOF
     local output
     output=$(
         cd "$agent_dir" && \
+        NPS_DIR="$NPS_DIR" \
+        NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" \
         NPS_PROMPT="$prompt" \
         NPS_MODEL="$model" \
         NPS_MAX_TURNS="$max_turns" \
@@ -455,14 +464,18 @@ PYEOF
         NPS_BUDGET="$budget" \
         NPS_ADD_DIRS="$add_dirs" \
         python3 - <<'PYEOF' 2>&1 || true
-import json, os, subprocess, threading
+import json, os, subprocess, sys, threading
+sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
+from calc_npt import calc_npt, detect_family
 
-prompt     = os.environ['NPS_PROMPT']
-model      = os.environ['NPS_MODEL']
-max_turns  = int(os.environ['NPS_MAX_TURNS'])
-time_limit = int(os.environ['NPS_TIME_LIMIT'])
-budget     = int(os.environ['NPS_BUDGET'])
-add_dirs   = os.environ.get('NPS_ADD_DIRS', '').split()
+prompt       = os.environ['NPS_PROMPT']
+model        = os.environ['NPS_MODEL']
+max_turns    = int(os.environ['NPS_MAX_TURNS'])
+time_limit   = int(os.environ['NPS_TIME_LIMIT'])
+budget       = int(os.environ['NPS_BUDGET'])
+add_dirs     = os.environ.get('NPS_ADD_DIRS', '').split()
+rates        = json.loads(os.environ.get('NPS_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
+model_family = detect_family(model)
 
 cmd = [
     'claude', '-p', prompt,
@@ -502,11 +515,7 @@ try:
         events.append(event)
         if event.get('type') == 'assistant':
             u = (event.get('message') or {}).get('usage') or {}
-            state['accum_npt'] += (
-                (u.get('input_tokens') or 0)
-                + (u.get('output_tokens') or 0)
-                + (u.get('cache_read_input_tokens') or 0)
-            )
+            state['accum_npt'] += calc_npt(u, model_family, rates)
             if state['accum_npt'] > budget and state['stop_reason'] == 'end_turn':
                 state['stop_reason'] = 'budget_exceeded'
                 try:
@@ -568,22 +577,19 @@ PYEOF
         # carries untrusted worker output but it's never parsed as Python or
         # shell code, and the `read` below is `IFS=$'\t'` so newlines/tabs
         # within fields can't corrupt the structure.
-        #
-        # NPT approximation for v0.1.0: input + output + cache_read tokens.
-        # Full NPS-0 §4.3 token-budget.md implementation lands in v0.2.0.
         local parse_out
-        parse_out=$(CLEAN_JSON="$clean_json" python3 - <<'PYEOF' 2>/dev/null || true
+        parse_out=$(CLEAN_JSON="$clean_json" NPS_DIR="$NPS_DIR" NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" NPS_MODEL="$model" python3 - <<'PYEOF' 2>/dev/null || true
 import json, os, sys
+sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
+from calc_npt import calc_npt, detect_family
 try:
     d = json.loads(os.environ['CLEAN_JSON'])
 except json.JSONDecodeError:
     sys.exit(1)
 usage = d.get('usage') or {}
-cost_npt_val = (
-    (usage.get('input_tokens') or 0)
-    + (usage.get('output_tokens') or 0)
-    + (usage.get('cache_read_input_tokens') or 0)
-)
+rates = json.loads(os.environ.get('NPS_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
+model_family = detect_family(os.environ.get('NPS_MODEL', ''))
+cost_npt_val = calc_npt(usage, model_family, rates)
 fields = [
     str(d.get('result', 'NO RESULT'))[:500].replace('\t', ' ').replace('\n', ' '),
     str(cost_npt_val),
