@@ -13,5 +13,14 @@
   },
   "default_model": "sonnet",
   "default_time_limit_s": 900,
-  "default_max_turns": 100
+  "default_max_turns": 100,
+  "default_soft_cap_ratio": 0.90,
+  "npt_exchange_rates": {
+    "claude": 1.05,
+    "gpt":    1.0,
+    "gemini": 0.95,
+    "llama":  1.02,
+    "mistral": 0.98,
+    "unknown": 1.0
+  }
 }
