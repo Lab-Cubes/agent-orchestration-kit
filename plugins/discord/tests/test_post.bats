@@ -18,6 +18,10 @@ setup() {
     > "$CURL_ARGS_FILE"
     export CURL_ARGS_FILE
 
+    # File where mock curl tracks invocation count (shared across curl calls in one run)
+    CURL_COUNT_FILE="$PLUGIN_TMPDIR/curl_count"
+    export CURL_COUNT_FILE
+
     # Prepend mock curl so _post.sh never calls the real Discord API
     export PATH="$BATS_TEST_DIRNAME/bin:$PATH"
 }
@@ -136,4 +140,68 @@ PYEOF
     run "$PLUGIN_TMPDIR/_post.sh" task_claimed
     [ "$status" -eq 0 ]
     [ ! -s "$CURL_ARGS_FILE" ]   # curl must NOT have been called
+}
+
+# ---------------------------------------------------------------------------
+# 7. 429 → 200: retries once on 429 then succeeds on 200
+# ---------------------------------------------------------------------------
+@test "_post.sh retries once on 429 then succeeds on 200" {
+    cp "$FIXTURES/valid_config.json" "$PLUGIN_TMPDIR/config.json"
+
+    export NPS_AGENT_ID="coder-01"
+    export NPS_TASK_ID="task-429-retry"
+    export NPS_COST_NPT="0"
+    export MOCK_CURL_SCRIPT="429,200"
+
+    run "$PLUGIN_TMPDIR/_post.sh" task_claimed
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "discord.com/api" "$CURL_ARGS_FILE")" -eq 2 ]
+}
+
+# ---------------------------------------------------------------------------
+# 8. Persistent 429: capped at 3 attempts (attempt 0, 1, 2; max_retries=2)
+# ---------------------------------------------------------------------------
+@test "_post.sh caps retries on persistent 429 (exits 0, bounded attempts)" {
+    cp "$FIXTURES/valid_config.json" "$PLUGIN_TMPDIR/config.json"
+
+    export NPS_AGENT_ID="coder-01"
+    export NPS_TASK_ID="task-429-cap"
+    export NPS_COST_NPT="0"
+    export MOCK_CURL_SCRIPT="429,429,429,429,429"
+
+    run "$PLUGIN_TMPDIR/_post.sh" task_claimed
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "discord.com/api" "$CURL_ARGS_FILE")" -eq 3 ]
+}
+
+# ---------------------------------------------------------------------------
+# 9. 500: non-429 error — no retry, silent exit 0
+# ---------------------------------------------------------------------------
+@test "_post.sh does not retry on 500 (non-429 error, silent drop)" {
+    cp "$FIXTURES/valid_config.json" "$PLUGIN_TMPDIR/config.json"
+
+    export NPS_AGENT_ID="coder-01"
+    export NPS_TASK_ID="task-500-noretry"
+    export NPS_COST_NPT="0"
+    export MOCK_CURL_SCRIPT="500"
+
+    run "$PLUGIN_TMPDIR/_post.sh" task_claimed
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "discord.com/api" "$CURL_ARGS_FILE")" -eq 1 ]
+}
+
+# ---------------------------------------------------------------------------
+# 10. 200: happy path — single invocation, exit 0
+# ---------------------------------------------------------------------------
+@test "_post.sh does not retry on 200 (happy path, single invocation)" {
+    cp "$FIXTURES/valid_config.json" "$PLUGIN_TMPDIR/config.json"
+
+    export NPS_AGENT_ID="coder-01"
+    export NPS_TASK_ID="task-200-happy"
+    export NPS_COST_NPT="0"
+    export MOCK_CURL_SCRIPT="200"
+
+    run "$PLUGIN_TMPDIR/_post.sh" task_claimed
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "discord.com/api" "$CURL_ARGS_FILE")" -eq 1 ]
 }
