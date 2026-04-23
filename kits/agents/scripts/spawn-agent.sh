@@ -501,7 +501,13 @@ cmd = [
 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                         text=True, bufsize=1)
 
-state = {'stop_reason': 'end_turn', 'accum_npt': 0, 'graceful_exit': False}
+state = {
+    'stop_reason':   'end_turn',
+    'accum_npt':     0,
+    'graceful_exit': False,
+    'native': {'input_tokens': 0, 'output_tokens': 0,
+               'cache_read_input_tokens': 0, 'cache_creation_input_tokens': 0},
+}
 
 def _kill_on_deadline():
     state['stop_reason'] = 'time_limit'
@@ -526,6 +532,9 @@ try:
         events.append(event)
         if event.get('type') == 'assistant':
             u = (event.get('message') or {}).get('usage') or {}
+            for ch in ('input_tokens', 'output_tokens',
+                       'cache_read_input_tokens', 'cache_creation_input_tokens'):
+                state['native'][ch] += u.get(ch) or 0
             state['accum_npt'] += calc_npt(u, model_family, rates)
             if state['accum_npt'] >= soft_cap and state['stop_reason'] == 'end_turn':
                 state['stop_reason'] = 'soft_cap'
@@ -574,11 +583,12 @@ else:
     u = (result_event or {}).get('usage') or {}
     out = {
         'result':             f"Worker terminated: {state['stop_reason']}",
-        'usage':              u if u else {'input_tokens': 0, 'output_tokens': state['accum_npt'], 'cache_read_input_tokens': 0},
+        'usage':              u if u else state['native'],
         'num_turns':          (result_event or {}).get('num_turns', 0),
         'stop_reason':        state['stop_reason'],
         'is_error':           True,
         'permission_denials': [],
+        '_terminated_npt':    state['accum_npt'],
     }
 print(json.dumps(out))
 PYEOF
@@ -614,9 +624,12 @@ try:
 except json.JSONDecodeError:
     sys.exit(1)
 usage = d.get('usage') or {}
-rates = json.loads(os.environ.get('NPS_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
-model_family = detect_family(os.environ.get('NPS_MODEL', ''))
-cost_npt_val = calc_npt(usage, model_family, rates)
+if '_terminated_npt' in d:
+    cost_npt_val = d['_terminated_npt']
+else:
+    rates = json.loads(os.environ.get('NPS_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
+    model_family = detect_family(os.environ.get('NPS_MODEL', ''))
+    cost_npt_val = calc_npt(usage, model_family, rates)
 fields = [
     str(d.get('result', 'NO RESULT'))[:500].replace('\t', ' ').replace('\n', ' '),
     str(cost_npt_val),
