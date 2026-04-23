@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "nps-kit agents config",
+  "type": "object",
+  "required": ["issuer_domain", "issuer_agent_id"],
+  "properties": {
+    "issuer_domain": {"type": "string", "minLength": 1},
+    "issuer_agent_id": {"type": "string", "minLength": 1},
+    "default_capabilities": {"type": "array", "items": {"type": "string"}},
+    "default_budget_npt": {"type": "integer", "minimum": 1},
+    "category_budget_npt": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 1}
+    },
+    "default_model": {"type": "string"},
+    "default_time_limit_s": {"type": "integer", "minimum": 1},
+    "default_max_turns": {"type": "integer", "minimum": 1},
+    "model_rates": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "input_usd_per_mtok": {"type": "number", "minimum": 0},
+          "output_usd_per_mtok": {"type": "number", "minimum": 0},
+          "cache_read_usd_per_mtok": {"type": "number", "minimum": 0},
+          "npt_usd": {"type": "number", "minimum": 0}
+        }
+      }
+    },
+    "category_usd_cap": {
+      "type": "object",
+      "additionalProperties": {"type": "number", "minimum": 0}
+    },
+    "nop_overhead_usd": {"type": "number", "minimum": 0}
+  }
+}

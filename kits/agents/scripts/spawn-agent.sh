@@ -76,6 +76,10 @@ DEFAULT_MAX_TURNS=100
 DEFAULT_BUDGET_NPT=20000
 
 if [[ -f "$CONFIG_FILE" ]]; then
+    if ! python3 "$NPS_DIR/scripts/lib/validate_config.py" "$CONFIG_FILE" >&2; then
+        err "config.json validation failed — see errors above"
+        exit 1
+    fi
     # Python reads the config path from argv and emits one KEY=value per line.
     # Bash reads back via a safe while loop, no eval.
     while IFS='=' read -r key value; do
