@@ -550,7 +550,7 @@ PYEOF
     echo "$output" > "$agent_dir/done/${task_id}.raw-output.json"
 
     local clean_json
-    clean_json=$(echo "$output" | grep '^{' | head -1)
+    clean_json=$(echo "$output" | python3 "$NPS_DIR/scripts/lib/extract_result_json.py")
 
     local result="NO JSON OUTPUT"
     local cost_npt="0"

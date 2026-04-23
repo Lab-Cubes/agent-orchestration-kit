@@ -38,6 +38,7 @@ build_kit_tree() {
     # Copy scripts from the real kit
     cp "$source_kit/scripts/spawn-agent.sh" "$KIT_SCRIPTS/"
     chmod +x "$KIT_SCRIPTS/spawn-agent.sh"
+    cp -r "$source_kit/scripts/lib" "$KIT_SCRIPTS/"
 
     # Copy templates (AGENT-CLAUDE.md + personas/) from the real kit
     cp -r "$source_kit/templates" "$KIT_TEMPLATES"
