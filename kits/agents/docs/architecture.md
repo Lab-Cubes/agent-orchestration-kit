@@ -1,6 +1,6 @@
 ---
 title: Orch-kit Architecture
-version: "@nps-kit/agents@0.2.1-draft"
+version: "@nps-kit/agents@0.2.2-draft"
 audience: kit adopters, orchestrator implementers, NPS contributors
 ---
 
@@ -259,20 +259,20 @@ Change-class classification (`change_class`, `scope_patch | graph_restructure | 
 
 ### 4.5 Intent + Result payloads (NPS-1/5)
 
-`NopIntentPayload` and `NopResultPayload` in [`src/nop-types.ts`](../src/nop-types.ts) gain a `plan_id` field. Additive, non-breaking.
+`NopIntentPayload` and `NopResultPayload` in [`src/nop-types.ts`](../src/nop-types.ts) gain a `plan_id` field. Additive, non-breaking. Optional in v1; required once Dispatcher 4a (#63) is the only intent-emitting caller — at which point every intent carries its plan_id by construction.
 
 ```typescript
 interface NopIntentPayload {
   _nop: 1;
   id: string;              // task-{issuer}-{YYYYMMDD}-{HHMMSS}
-  plan_id: string;         // NEW: plan-{issuer}-{YYYYMMDD}-{HHMMSS}
+  plan_id?: string;        // Optional in v1; required post-#63 (Dispatcher 4a)
   from: string;
   to?: string;
   // ... existing fields
 }
 ```
 
-Worker results carry the same back-pointer, enabling cross-plan worker reuse with flat inbox.
+`NopResultPayload` carries the same optional `plan_id?: string` back-pointer, enabling cross-plan worker reuse with flat inbox.
 
 ---
 
@@ -485,3 +485,4 @@ Layer replacement (e.g., changing the Dispatcher from one-shot to long-running d
 |---|---|---|
 | 0.2.0-draft | 2026-04-24 | Initial architecture doc. Adds Plan/Decompose/Dispatch/Execute four-layer model, NOP TaskFrame-aligned task-list schema, versioned re-decomposition, escalation log, gate boundaries, NPS alignment notes. |
 | 0.2.1-draft | 2026-04-24 | Cold-critic revisions: dropped `change_class_hint` dead field from v1 log schema (§4.4), added `decomposer_timeout_ms` config + NOP DAG limit enforcement (§5.2, §5.3), added flock concurrency guard on Dispatcher state-file access (§6.2), specified Dispatcher-side partial commit on supersede (§6.4), added pushback resumption ritual (§6.1), flagged trivial-decomposer + tightened-persona incompatibility (§5.4). Post-round-2: dropped delegation-depth check (misapplied — kit has no sub-worker delegation); renumbered §5.4/§5.5. Post-round-3: synced §6.4 with issue-04 (`--no-verify`, HEAD-state check, per-node event granularity); complex-HEAD workers route via existing `blocked` status instead of a new enum value. Post-round-4: gated `active_version` flip on full v_N drain — complex-HEAD `blocked` nodes prevent silent version advance past untriaged worktrees (§6.4 step 6). Post-round-5: supersede pass now iterates all v_N nodes (not just `running`); pushback-blocked workers (with result file) resolve as `pushback_superseded`, complex-HEAD-blocked gate drain correctly; renamed `NOP-SUPERSEDE-INCOMPLETE` to `KIT-SUPERSEDE-INCOMPLETE` (kit-specific, not NOP canon); added `supersede_resolved` event for OSer manual triage audit. Post-round-6: terminal v_N nodes archive via branch rename (event `supersede_archived`) — prevents `cmd_merge` picking up orphan v_N branches after version flip (§6.4 step 1). |
+| 0.2.2-draft | 2026-04-24 | §4.5 plan_id optionality sync with #61 ruling A — TS snippet and prose updated to `plan_id?: string` (optional in v1, required post-#63). Closes #74. |
