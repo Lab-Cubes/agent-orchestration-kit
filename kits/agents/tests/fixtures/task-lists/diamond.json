@@ -1,0 +1,104 @@
+{
+  "_ncp": 1,
+  "type": "task_list",
+  "schema_version": 1,
+  "plan_id": "plan-test-diamond-20260101-000000",
+  "version_id": 1,
+  "created_at": "2026-01-01T00:00:00Z",
+  "created_by": "urn:nps:agent:test.localhost:decomposer",
+  "prior_version": null,
+  "pushback_reason": null,
+  "dag": {
+    "nodes": [
+      {
+        "id": "node-root",
+        "action": "echo-task",
+        "agent": "urn:nps:agent:test.localhost:coder-01",
+        "input_from": [],
+        "input_mapping": {},
+        "scope": [],
+        "budget_npt": 1000,
+        "timeout_ms": 60000,
+        "retry_policy": {
+          "max_retries": 0,
+          "backoff_ms": 0
+        },
+        "condition": null,
+        "success_criteria": {}
+      },
+      {
+        "id": "node-branch-a",
+        "action": "echo-task",
+        "agent": "urn:nps:agent:test.localhost:coder-01",
+        "input_from": [
+          "node-root"
+        ],
+        "input_mapping": {},
+        "scope": [],
+        "budget_npt": 1000,
+        "timeout_ms": 60000,
+        "retry_policy": {
+          "max_retries": 0,
+          "backoff_ms": 0
+        },
+        "condition": null,
+        "success_criteria": {}
+      },
+      {
+        "id": "node-branch-b",
+        "action": "echo-task",
+        "agent": "urn:nps:agent:test.localhost:coder-02",
+        "input_from": [
+          "node-root"
+        ],
+        "input_mapping": {},
+        "scope": [],
+        "budget_npt": 1000,
+        "timeout_ms": 60000,
+        "retry_policy": {
+          "max_retries": 0,
+          "backoff_ms": 0
+        },
+        "condition": null,
+        "success_criteria": {}
+      },
+      {
+        "id": "node-terminal",
+        "action": "echo-task",
+        "agent": "urn:nps:agent:test.localhost:coder-01",
+        "input_from": [
+          "node-branch-a",
+          "node-branch-b"
+        ],
+        "input_mapping": {},
+        "scope": [],
+        "budget_npt": 1000,
+        "timeout_ms": 60000,
+        "retry_policy": {
+          "max_retries": 0,
+          "backoff_ms": 0
+        },
+        "condition": null,
+        "success_criteria": {}
+      }
+    ],
+    "edges": [
+      {
+        "from": "node-root",
+        "to": "node-branch-a"
+      },
+      {
+        "from": "node-root",
+        "to": "node-branch-b"
+      },
+      {
+        "from": "node-branch-a",
+        "to": "node-terminal"
+      },
+      {
+        "from": "node-branch-b",
+        "to": "node-terminal"
+      }
+    ]
+  }
+}

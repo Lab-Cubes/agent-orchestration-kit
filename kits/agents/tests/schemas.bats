@@ -112,6 +112,27 @@ setup() {
     [ "$status" -eq 1 ]
 }
 
+# ---------------------------------------------------------------------------
+# task-list fixture corpus (tests/fixtures/task-lists/)
+# ---------------------------------------------------------------------------
+
+@test "task-list fixtures: all five canonical shapes validate against schema" {
+    local tl_fixtures="$REPO_ROOT/kits/agents/tests/fixtures/task-lists"
+    local schema="$SCHEMA_DIR/task-list.schema.json"
+    local failed=0
+    for f in "$tl_fixtures"/*.json; do
+        if ! python3 "$VALIDATOR" "$schema" "$f" 2>/dev/null; then
+            echo "FAIL: $f" >&3
+            failed=$(( failed + 1 ))
+        fi
+    done
+    [ "$failed" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# plan-frontmatter (continued)
+# ---------------------------------------------------------------------------
+
 @test "plan-frontmatter: missing required field (title) fails" {
     run python3 -c "
 import json, tempfile, os, sys
