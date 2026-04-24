@@ -594,6 +594,18 @@ for e in reversed(events):
 
 if result_event and not forced:
     out = result_event
+elif not result_event and not forced and events:
+    # Runtime (e.g. kiro-cli) produced output but no structured result event.
+    # Synthesize a success result from collected text.
+    text_lines = [e.get('content', '') for e in events if e.get('type') == 'text']
+    out = {
+        'result':             '\n'.join(text_lines)[:2000] if text_lines else 'Worker completed (no structured output)',
+        'usage':              state['native'],
+        'num_turns':          1,
+        'stop_reason':        'end_turn',
+        'is_error':           False,
+        'permission_denials': [],
+    }
 else:
     u = (result_event or {}).get('usage') or {}
     out = {
