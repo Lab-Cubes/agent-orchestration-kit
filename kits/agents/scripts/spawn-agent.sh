@@ -457,7 +457,14 @@ PYEOF
     if [[ -n "$worktree_path" ]]; then
         branch_instruction=" IMPORTANT: Your workspace is at $worktree_path (a git worktree on branch $branch_name). Do all work there. Do NOT push — the operator will squash-merge your branch after review."
     fi
-    local prompt="You are $agent_id. Read your CLAUDE.md for identity and protocol. Then use Bash to run 'ls $agent_dir/inbox/' to find tasks. There IS a task waiting: ${task_id}.intent.json — read it, claim via mv to $agent_dir/active/, execute, archive intent to $agent_dir/done/, write result.json to $agent_dir/done/.${branch_instruction}"
+
+    local prompt
+    if [[ "$runtime" == "claude" ]]; then
+        prompt="You are $agent_id. Read your CLAUDE.md for identity and protocol. Then use Bash to run 'ls $agent_dir/inbox/' to find tasks. There IS a task waiting: ${task_id}.intent.json — read it, claim via mv to $agent_dir/active/, execute, archive intent to $agent_dir/done/, write result.json to $agent_dir/done/.${branch_instruction}"
+    else
+        # Non-Claude runtimes get the task directly — skip NOP protocol overhead
+        prompt="You are $agent_id, a worker agent. Your task: ${intent_text}.${branch_instruction} When done, commit your changes with a descriptive message."
+    fi
 
     log "Launching worker: $agent_id (model: $model, budget: $budget NPT, time-limit: ${time_limit}s, max-turns: $max_turns)"
     local start_time end_time duration
