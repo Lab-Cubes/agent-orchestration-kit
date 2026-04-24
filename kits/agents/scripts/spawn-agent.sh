@@ -508,7 +508,7 @@ PYEOF
         NPS_ADD_DIRS="$add_dirs" \
         NPS_RUNTIME="$runtime" \
         python3 - <<'PYEOF' 2>&1
-import json, math, os, signal, subprocess, sys, threading
+import json, math, os, signal, subprocess, sys, threading, time
 sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
 from calc_npt import calc_npt, detect_family
 
@@ -557,12 +557,25 @@ timer = threading.Timer(time_limit, _kill_on_deadline)
 timer.start()
 
 events = []
+last_heartbeat = time.time()
+start_ts = last_heartbeat
+HEARTBEAT_INTERVAL = 180  # 3 minutes
+
 try:
     for raw in proc.stdout:
         event = adapter.parse_event(raw)
         if event is None:
             continue
         events.append(event)
+
+        # Heartbeat: print progress every 3 minutes so operator knows it's alive
+        now = time.time()
+        if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+            mins = int((now - start_ts) / 60)
+            sys.stderr.write(f'[nps] ⏳ Still working... {mins}m elapsed, {len(events)} events received\n')
+            sys.stderr.flush()
+            last_heartbeat = now
+
         u = adapter.extract_usage(event)
         if u:
             for ch in ('input_tokens', 'output_tokens',
