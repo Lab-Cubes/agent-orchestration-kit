@@ -74,7 +74,6 @@ Every task arrives as an `.intent.json` file in `inbox/`:
       "model": "haiku|sonnet|opus",
       "time_limit": 900,
       "scope": ["dirs/files I may touch"],
-      "proceed_gate": false,
       "budget_npt": 20000
     }
   }
@@ -88,7 +87,6 @@ Every task arrives as an `.intent.json` file in `inbox/`:
 | `constraints.model` | Use specified model if different from my default |
 | `constraints.scope` | **Narrow only** — MUST NOT expand (NPS-5 §3.2 scope principle) |
 | `constraints.time_limit` | Hard stop — write timeout result if exceeded |
-| `constraints.proceed_gate` | If true, pause before file changes and wait for operator approval |
 | `constraints.budget_npt` | NPT cap for this task (NPS-0 §4.3) |
 
 ### Lifecycle

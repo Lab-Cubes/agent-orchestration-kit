@@ -61,8 +61,7 @@ Worker ID format: `{type}-{NN}` — e.g. `coder-01`, `researcher-01`.
     "constraints": {
       "model": "haiku | sonnet | opus",
       "time_limit": 900,
-      "scope": ["/absolute/path/to/worktree"],
-      "proceed_gate": false
+      "scope": ["/absolute/path/to/worktree"]
     }
   }
 }
@@ -405,7 +404,6 @@ Use this checklist to verify a new runtime port implements the protocol correctl
 - [ ] `payload.id` is used as the canonical task ID throughout.
 - [ ] `payload.constraints.scope` is respected — worker stays within scope.
 - [ ] `payload.constraints.time_limit` is enforced — write timeout result on exceed.
-- [ ] `payload.constraints.proceed_gate == true` causes worker to pause before file changes.
 
 ### Result writing
 

@@ -411,7 +411,6 @@ intent = {
             'model': model,
             'time_limit': int(time_limit),
             'scope': scope_list,
-            'proceed_gate': False,
             'budget_npt': int(budget),
         },
     },

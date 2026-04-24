@@ -122,8 +122,6 @@ export interface TaskConstraints {
   model?: string;
   time_limit?: number;
   scope?: string[];
-  /** If true, the worker pauses before file changes and waits for operator approval. */
-  proceed_gate?: boolean;
   /** Max NPT the worker may consume for this task (NPS-0 §4.3). */
   budget_npt?: number;
 }
