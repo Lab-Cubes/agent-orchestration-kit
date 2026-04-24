@@ -38,7 +38,7 @@ teardown() {
 # --runtime flag
 # ---------------------------------------------------------------------------
 
-@test "#57 --runtime kiro uses kiro-cli mock" {
+@test "#57 --runtime kiro uses kiro-cli mock and captures output" {
     export MOCK_CLAUDE_MODE=happy
 
     run_spawner setup coder-01 coder
@@ -49,6 +49,20 @@ teardown() {
 
     # kiro-cli should have been invoked
     grep -q "kiro-cli" "$MOCK_CLAUDE_ARGS_FILE"
+
+    # result.json should contain the worker's output (not empty)
+    local result_file
+    result_file=$(ls "$KIT_AGENTS/coder-01/done/"*.result.json 2>/dev/null | head -1)
+    [ -f "$result_file" ]
+
+    run python3 -c "
+import json
+d = json.load(open('$result_file'))
+v = d.get('value', '') or d.get('payload', {}).get('value', '')
+assert len(v) > 0, f'result value is empty: {v!r}'
+print('ok')
+"
+    [ "$status" -eq 0 ]
 }
 
 @test "#57 --runtime claude uses claude mock (default)" {

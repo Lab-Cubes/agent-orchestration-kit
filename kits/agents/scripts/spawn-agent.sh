@@ -478,9 +478,17 @@ PYEOF
     # so blocked readline() calls are interrupted when the process is killed.
     # Emits a single JSON line mirroring --output-format json so the parse
     # block below needs no changes.
+    # For runtimes without --add-dir (e.g. kiro), cd into the worktree
+    # so the worker operates on the right files. Claude uses --add-dir
+    # and runs from the agent dir (mailbox access).
+    local work_dir="$agent_dir"
+    if [[ "$runtime" != "claude" && -n "$worktree_path" ]]; then
+        work_dir="$worktree_path"
+    fi
+
     local output
     output=$(
-        cd "$agent_dir" && \
+        cd "$work_dir" && \
         NPS_DIR="$NPS_DIR" \
         NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" \
         NPS_SHUTDOWN_GRACE_S="$shutdown_grace_s" \

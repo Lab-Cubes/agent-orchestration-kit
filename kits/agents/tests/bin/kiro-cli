@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Mock Kiro CLI — mirrors tests/bin/claude for the kiro adapter.
-# Supports MOCK_CLAUDE_MODE (same modes as the claude mock).
+# Mock Kiro CLI — emits plaintext (not stream-json) like real kiro-cli.
 set -u
 
 if [[ -n "${MOCK_CLAUDE_ARGS_FILE:-}" ]]; then
@@ -11,14 +10,13 @@ MODE="${MOCK_CLAUDE_MODE:-happy}"
 
 case "$MODE" in
     happy)
-        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"kiro-default","usage":{"input_tokens":1234,"output_tokens":567,"cache_creation_input_tokens":0,"cache_read_input_tokens":890}},"session_id":"mock"}\n'
-        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":1000,"duration_api_ms":900,"num_turns":5,"result":"Mock Kiro worker completed task successfully.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":1234,"output_tokens":567,"cache_creation_input_tokens":0,"cache_read_input_tokens":890},"permission_denials":[]}\n'
+        echo "Mock Kiro worker completed task successfully."
+        echo "Created models.py, db.py, cli.py"
         exit 0
         ;;
     error)
-        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"kiro-default","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
-        printf '{"type":"result","subtype":"error_during_execution","is_error":true,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"Mock Kiro error occurred.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
-        exit 0
+        echo "Mock Kiro error occurred." >&2
+        exit 1
         ;;
     *)
         echo "mock kiro-cli: unknown MOCK_CLAUDE_MODE='$MODE'" >&2

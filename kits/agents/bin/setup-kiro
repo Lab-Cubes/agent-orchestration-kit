@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-KIT_DIR="$(cd "$(dirname "$0")" && pwd)/kits/agents"
+KIT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIG="$KIT_DIR/config.json"
 
 # Check kiro-cli is installed
@@ -44,13 +44,13 @@ echo ""
 echo "Kiro CLI adapter configured. Usage:"
 echo ""
 echo "  # Dispatch a task on a repo (creates git worktree)"
-echo "  ./kits/agents/scripts/spawn-agent.sh dispatch coder-01 \"Fix the bug\" --scope /path/to/repo"
+echo "  ./scripts/spawn-agent.sh dispatch coder-01 \"Fix the bug\" --scope /path/to/repo"
 echo ""
 echo "  # Dispatch without a repo"
-echo "  ./kits/agents/scripts/spawn-agent.sh dispatch coder-01 \"Write a CSV parser\""
+echo "  ./scripts/spawn-agent.sh dispatch coder-01 \"Write a CSV parser\""
 echo ""
 echo "  # Check status"
-echo "  ./kits/agents/scripts/spawn-agent.sh status coder-01"
+echo "  ./scripts/spawn-agent.sh status coder-01"
 echo ""
 echo "  # Merge worker's branch"
-echo "  ./kits/agents/scripts/spawn-agent.sh merge task-operator-XXXXXXXX-XXXXXX --no-push"
+echo "  ./scripts/spawn-agent.sh merge task-operator-XXXXXXXX-XXXXXX --no-push"

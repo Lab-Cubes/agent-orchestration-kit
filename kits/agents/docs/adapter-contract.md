@@ -33,7 +33,16 @@ Each adapter lives in `scripts/lib/adapters/<name>.py` and extends `AdapterBase`
 
 - Runtimes without stream-json output (e.g. Kiro) get synthetic results from collected text
 - Runtimes without per-event token reporting have no NPT budget enforcement; `--time-limit` is the safety net
-- `add_dirs` scope enforcement is runtime-specific: Claude uses `--add-dir`, Kiro has no equivalent
+- `add_dirs` scope enforcement is runtime-specific: Claude uses `--add-dir`, Kiro has no equivalent — `constraints.scope` is advisory-only under Kiro until upstream adds a filesystem-scope flag
+
+## Security surface differences
+
+| Adapter | Tool trust mechanism | Scope |
+|---------|---------------------|-------|
+| Claude | `--permission-mode dontAsk --allowedTools Read,Edit,Write,Bash,Glob,Grep` (explicit allowlist) | `--add-dir` restricts filesystem access |
+| Kiro | `--trust-tools=fs_read,fs_write,execute_bash` (named tools) | No filesystem restriction — worker can access any path |
+
+Operators should be aware that Kiro workers have broader filesystem access than Claude workers.
 
 ## References
 

@@ -14,11 +14,11 @@ class KiroAdapter(AdapterBase):
         cmd = [
             'kiro-cli', 'chat',
             '--no-interactive',
-            '--trust-all-tools',
+            '--trust-tools=fs_read,fs_write,fs_list,execute_bash',
             '--model', model,
         ]
-        # kiro-cli has no --add-dir equivalent; scope dirs are informational
-        # only. Log them but don't pass — kiro-cli rejects unknown flags.
+        # kiro-cli has no --add-dir equivalent; scope dirs are not passed.
+        # constraints.scope is advisory-only under Kiro.
         # kiro-cli takes the prompt as a positional argument
         cmd.append(prompt)
         return cmd
