@@ -24,6 +24,73 @@ say()   { echo -e "${GREEN}[demo]${NC} $*"; }
 hi()    { echo -e "${CYAN}$*${NC}"; }
 warn()  { echo -e "${YELLOW}[demo]${NC} $*"; }
 
+# ---------------------------------------------------------------------------
+# Flags
+# ---------------------------------------------------------------------------
+PHASED_PREVIEW=false
+for arg in "$@"; do
+    [[ "$arg" == "--phased-dispatch-preview" ]] && PHASED_PREVIEW=true
+done
+
+# ---------------------------------------------------------------------------
+# Phased-dispatch preview — Plan → Decompose → pending task-list
+#
+# Runs without ./bin/setup or the Claude CLI. Useful for verifying the
+# Decomposer pipeline independently of the full NOP dispatch path.
+# ---------------------------------------------------------------------------
+if [[ "$PHASED_PREVIEW" == "true" ]]; then
+    hi ""
+    hi "╭────────────────────────────────────────────────────────────╮"
+    hi "│  NPS Phased-Dispatch Preview  (Plan → Decompose → pending)  │"
+    hi "╰────────────────────────────────────────────────────────────╯"
+    hi ""
+    say "Generating sample plan → running Decomposer → writing pending task-list..."
+    say ""
+
+    PREVIEW_TMPDIR="$(mktemp -d)"
+    PLAN_ID="plan-demo-$(date -u +%Y%m%d-%H%M%S)"
+    PREVIEW_INPUT="$PREVIEW_TMPDIR/decompose-input.json"
+
+    python3 - "$PLAN_ID" "$PREVIEW_INPUT" <<'PYEOF'
+import json, sys
+plan_id, out_path = sys.argv[1], sys.argv[2]
+json.dump({
+    "plan": "---\nplan_id: " + plan_id + "\ntitle: Demo phased-dispatch plan\nstatus: pending\ncreated_at: 2026-01-01T00:00:00Z\n---\n\nDemo plan body.",
+    "context": {"files": [], "knowledge": [], "branch": "main"},
+    "prior_version": None, "prior_state": None, "pushback": None,
+}, open(out_path, 'w'))
+PYEOF
+
+    DECOMPOSE_OUT="$PREVIEW_TMPDIR/decompose-stdout.txt"
+    NPS_TASKLISTS_HOME="$PREVIEW_TMPDIR/task-lists" \
+        "$NPS_DIR/scripts/spawn-agent.sh" decompose < "$PREVIEW_INPUT" \
+        > "$DECOMPOSE_OUT" 2>&1 || {
+        warn "Decompose failed — check config.json and scripts/lib/decomposers/trivial.py."
+        rm -rf "$PREVIEW_TMPDIR"
+        exit 1
+    }
+    PENDING_PATH=$(tail -1 "$DECOMPOSE_OUT")
+
+    say "  Plan ID:      $PLAN_ID"
+    say "  Pending file: $PENDING_PATH"
+    echo ""
+    echo "Task-list summary:"
+    python3 - "$PENDING_PATH" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(f"  version_id:  {d['version_id']}")
+print(f"  nodes:       {len(d['dag']['nodes'])}")
+print(f"  action:      {d['dag']['nodes'][0]['action']}")
+print(f"  created_by:  {d['created_by']}")
+PYEOF
+    echo ""
+    say "OSer gate next: ./scripts/spawn-agent.sh ack $PLAN_ID 1"
+    echo ""
+
+    rm -rf "$PREVIEW_TMPDIR"
+    exit 0
+fi
+
 if [[ ! -f .nps-installed ]]; then
     warn "This kit has not been set up yet. Run ./bin/setup first."
     exit 1
