@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloverthe.ai/schemas/orch-kit/v1/task-list-state.schema.json",
+  "title": "TaskListState",
+  "description": "Graph-level execution state for one active plan version. Mirrors TaskListState + NodeState in nop-types.ts.",
+  "type": "object",
+  "required": ["schema_version", "plan_id", "active_version", "superseded_versions", "node_states", "merge_hold", "updated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "active_version": {
+      "type": "integer"
+    },
+    "superseded_versions": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "node_states": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/NodeState"
+      }
+    },
+    "merge_hold": {
+      "type": "boolean"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "NodeState": {
+      "type": "object",
+      "required": ["status", "task_id", "started_at", "completed_at", "result_path", "retries"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "running", "completed", "failed", "superseded", "blocked"]
+        },
+        "task_id": {
+          "type": ["string", "null"]
+        },
+        "started_at": {
+          "type": ["string", "null"]
+        },
+        "completed_at": {
+          "type": ["string", "null"]
+        },
+        "result_path": {
+          "type": ["string", "null"]
+        },
+        "retries": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

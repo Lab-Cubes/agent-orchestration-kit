@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "plan_id": "plan-cloverthe.ai-20260424-123456",
+  "active_version": 1,
+  "superseded_versions": [],
+  "node_states": {
+    "node-1": {
+      "status": "invalid_status",
+      "task_id": null,
+      "started_at": null,
+      "completed_at": null,
+      "result_path": null,
+      "retries": 0
+    }
+  },
+  "merge_hold": false,
+  "updated_at": "2026-04-24T12:00:00Z"
+}

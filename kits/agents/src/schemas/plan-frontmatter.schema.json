@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloverthe.ai/schemas/orch-kit/v1/plan-frontmatter.schema.json",
+  "title": "PlanFrontmatter",
+  "description": "Required and optional fields from the YAML frontmatter of plans/{plan-id}/plan.md. Validated as a JSON object extracted from the frontmatter dict.",
+  "type": "object",
+  "required": ["plan_id", "created_at", "created_by", "title", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "plan_id": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "osi_ack_at": {
+      "type": "string"
+    },
+    "osi_ack_by": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "acked", "executing", "completed", "cancelled"]
+    }
+  }
+}

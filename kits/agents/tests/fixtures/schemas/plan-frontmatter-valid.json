@@ -1,0 +1,9 @@
+{
+  "plan_id": "plan-cloverthe.ai-20260424-123456",
+  "created_at": "2026-04-24T12:34:56Z",
+  "created_by": "urn:nps:agent:cloverthe.ai:opus-overseer",
+  "osi_ack_at": "2026-04-24T12:40:01Z",
+  "osi_ack_by": "urn:nps:agent:cloverthe.ai:teddy",
+  "title": "Short plan title",
+  "status": "acked"
+}
