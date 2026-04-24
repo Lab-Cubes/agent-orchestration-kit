@@ -27,6 +27,9 @@
 
   "default_model": "sonnet",
 
+  "runtime": "claude",
+  "$comment_runtime": "Agent runtime adapter: 'claude' (Claude Code CLI) or 'kiro' (Kiro CLI). Override per-dispatch with --runtime.",
+
   "default_time_limit_s": 900,
 
   "default_max_turns": 100
