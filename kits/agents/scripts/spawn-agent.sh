@@ -701,13 +701,14 @@ PYEOF
         local completed_at
         completed_at=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
         python3 - "$task_id" "$status_val" "$agent_id" "$created_at" "$completed_at" \
-            "$duration" "$cost_npt" "$turns" "$stop_reason" "$ISSUER_DOMAIN" << 'PYEOF' > "$agent_result" 2>/dev/null
+            "$duration" "$cost_npt" "$turns" "$stop_reason" "$ISSUER_DOMAIN" "$result" << 'PYEOF' > "$agent_result" 2>/dev/null
 import json, sys
-_, task_id, status_val, agent_id, picked_up, completed, duration, cost_npt, turns, stop, issuer_domain = sys.argv
+_, task_id, status_val, agent_id, picked_up, completed, duration, cost_npt, turns, stop, issuer_domain, worker_result = sys.argv
+fallback_value = worker_result if worker_result and worker_result not in ('NO JSON OUTPUT', 'NO RESULT', 'PARSE ERROR') else f"Fallback result (worker did not complete NOP lifecycle). Stop reason: {stop}. Check raw-output.json."
 result = {
     "_ncp": 1,
     "type": "result",
-    "value": f"Fallback result (worker did not complete NOP lifecycle). Stop reason: {stop}. Check raw-output.json.",
+    "value": fallback_value,
     "probability": 0.5,
     "alternatives": [],
     "payload": {

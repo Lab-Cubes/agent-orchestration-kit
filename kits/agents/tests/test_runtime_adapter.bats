@@ -59,7 +59,8 @@ teardown() {
 import json
 d = json.load(open('$result_file'))
 v = d.get('value', '') or d.get('payload', {}).get('value', '')
-assert len(v) > 0, f'result value is empty: {v!r}'
+assert 'Kiro worker completed' in v or 'models.py' in v, \
+    f'result value should contain mock output, got: {v!r}'
 print('ok')
 "
     [ "$status" -eq 0 ]
@@ -92,4 +93,13 @@ print('ok')
 @test "#57 config.example.json has runtime field" {
     local source_kit="${BATS_TEST_DIRNAME%/tests}"
     grep -q '"runtime"' "$source_kit/config.example.json"
+}
+
+@test "#57 all files in bin/ and tests/bin/ are executable" {
+    local source_kit="${BATS_TEST_DIRNAME%/tests}"
+    local fail=0
+    for f in "$source_kit"/bin/* "$source_kit"/tests/bin/*; do
+        [ -x "$f" ] || { echo "not executable: $f"; fail=1; }
+    done
+    [ "$fail" -eq 0 ]
 }
