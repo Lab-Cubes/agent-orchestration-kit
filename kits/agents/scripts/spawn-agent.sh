@@ -614,7 +614,7 @@ elif not result_event and not forced and events:
     # Synthesize a success result from collected text.
     text_lines = [e.get('content', '') for e in events if e.get('type') == 'text']
     out = {
-        'result':             '\n'.join(text_lines)[:2000] if text_lines else 'Worker completed (no structured output)',
+        'result':             '\n'.join(text_lines)[:50000] if text_lines else 'Worker completed (no structured output)',
         'usage':              state['native'],
         'num_turns':          1,
         'stop_reason':        'end_turn',
@@ -673,7 +673,7 @@ else:
     model_family = detect_family(os.environ.get('NPS_MODEL', ''))
     cost_npt_val = calc_npt(usage, model_family, rates)
 fields = [
-    str(d.get('result', 'NO RESULT'))[:500].replace('\t', ' ').replace('\n', ' '),
+    str(d.get('result', 'NO RESULT'))[:5000].replace('\t', ' ').replace('\n', ' '),
     str(cost_npt_val),
     str(len(d.get('permission_denials') or [])),
     str(d.get('num_turns', 0)),
