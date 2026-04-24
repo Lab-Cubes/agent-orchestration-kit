@@ -14,7 +14,9 @@ class KiroAdapter(AdapterBase):
         cmd = [
             'kiro-cli', 'chat',
             '--no-interactive',
-            '--trust-tools=fs_read,fs_write,fs_list,execute_bash',
+            # Trust all built-in tools for full capability in non-interactive mode.
+            # --trust-all-tools doesn't work in --no-interactive; must name each tool.
+            '--trust-tools=fs_read,fs_write,execute_bash,glob,grep,code,web_search,web_fetch,use_aws',
             '--model', model,
         ]
         # kiro-cli has no --add-dir equivalent; scope dirs are not passed.
