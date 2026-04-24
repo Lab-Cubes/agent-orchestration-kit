@@ -362,6 +362,8 @@ export interface EscalationEvent {
   decomposer_output_version: number | null;
   osi_ack_at: string | null;
   osi_ack_verdict: "approve" | "reject" | "amend" | null;
+  /** NID of the OSer who acknowledged this escalation event. */
+  osi_ack_by: string | null;
   duration_s: number | null;
   /** `"plan"` reserved for v2; plan-level rejection creates a new plan_id. @see architecture.md §4.4 */
   escalation_level: "task" | "version";
