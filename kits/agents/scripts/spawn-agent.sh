@@ -1049,7 +1049,7 @@ timed_out = threading.Event()
 try:
     proc = subprocess.Popen(
         parts, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, text=True, env=env
+        stderr=subprocess.PIPE, text=True, env=env, cwd=nps_dir
     )
 except FileNotFoundError as e:
     print(f"DECOMPOSER_LAUNCH_FAILED:{e}", file=sys.stderr)
@@ -1133,6 +1133,7 @@ event = {
     "decomposer_output_version": decomposer_output_version,
     "osi_ack_at": None,
     "osi_ack_verdict": None,
+    "osi_ack_by": None,
     "duration_s": None,
     "escalation_level": "version",
 }
@@ -1276,12 +1277,8 @@ PYEOF
     mv "$tmp_output" "$pending_file"
     log "cmd_decompose: wrote $pending_file"
 
-    # --- Escalation event: invoked_decomposer on re-decompose path (N > 1) ---
-    # §2 step 5: first emission (N=1) is NOT an escalation event.
-    # Only re-decompose (N > 1, triggered by Dispatcher pushback) gets logged.
-    if [[ "$next_version" -gt 1 ]]; then
-        _append_decompose_event "invoked_decomposer" "null" "$next_version"
-    fi
+    # --- Escalation event: invoked_decomposer on every successful invocation ---
+    _append_decompose_event "invoked_decomposer" "null" "$next_version"
 
     # Emit absolute path for pipeline use
     echo "$pending_file"
