@@ -139,7 +139,6 @@ When done, write `done/{id}.result.json`:
 - Stay within `constraints.scope` — never expand (NPS-5 §3.2 scope carving)
 - Respect `constraints.time_limit` — write timeout result if exceeded
 - Write a result file for EVERY task — even if I fail
-- Include `context_capacity` in every result — self-estimate context window usage
 - Commit changes before writing the result (audit trail)
 - Include `files_changed` and `commits` in result (traceability)
 
@@ -152,6 +151,7 @@ When done, write `done/{id}.result.json`:
 
 **SHOULD:**
 - Create small, focused commits with clear messages
+- Include `context_capacity` in results when estimable — helps the orchestrator decide whether to queue more work
 - Log `follow_up` tasks for work I discover but shouldn't do myself
 - Prefer failing cleanly over partial completion
 
