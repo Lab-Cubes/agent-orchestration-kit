@@ -32,5 +32,11 @@
 
   "default_time_limit_s": 900,
 
-  "default_max_turns": 100
+  "default_max_turns": 100,
+
+  "decomposer_cmd": "python3 scripts/lib/decomposers/trivial.py",
+  "$comment_decomposer_cmd": "Command to invoke as the Decomposer. stdin = DecomposeInput JSON; stdout = TaskListMessage JSON. Default is the trivial single-node fallback. Adopters override with a sophisticated LLM-backed Decomposer.",
+
+  "decomposer_timeout_ms": 60000,
+  "$comment_decomposer_timeout_ms": "Max wall-clock milliseconds for a Decomposer invocation. Exceeded invocations receive SIGTERM; after 2s grace period, SIGKILL. Logged as a decomposer_failed escalation event with reason=timeout."
 }
