@@ -1,6 +1,6 @@
 ---
 title: Orch-kit Architecture
-version: "@nps-kit/agents@0.2.2-draft"
+version: "@nps-kit/agents@0.2.3-draft"
 audience: kit adopters, orchestrator implementers, NPS contributors
 ---
 
@@ -274,6 +274,19 @@ interface NopIntentPayload {
 
 `NopResultPayload` carries the same optional `plan_id?: string` back-pointer, enabling cross-plan worker reuse with flat inbox.
 
+### 4.6 Schema validator
+
+JSON Schema documents (draft-2020-12) for §4.1–§4.4 live at `src/schemas/*.schema.json`:
+
+- `task-list.schema.json` — mirrors `TaskListMessage`
+- `task-list-state.schema.json` — mirrors `TaskListState` + `NodeState`
+- `escalation-event.schema.json` — mirrors `EscalationEvent`
+- `plan-frontmatter.schema.json` — plan frontmatter fields
+
+A Python validator at `scripts/lib/validate_schema.py` accepts `<schema-path> <instance-path>`, exits 0 on valid and 1 on validation failure. `cmd_decompose` (#66) will invoke it to validate Decomposer output against `task-list.schema.json` before writing `pending/v{N}.json` — schema violations become `decomposer_failed` escalation events with the specific errors captured.
+
+`additionalProperties: false` is deliberate on all four schemas. Unknown fields are rejected so schema drift between Decomposer output and kit expectations is visible at ingest, not at runtime.
+
 ---
 
 ## 5. Decomposer interface
@@ -486,3 +499,4 @@ Layer replacement (e.g., changing the Dispatcher from one-shot to long-running d
 | 0.2.0-draft | 2026-04-24 | Initial architecture doc. Adds Plan/Decompose/Dispatch/Execute four-layer model, NOP TaskFrame-aligned task-list schema, versioned re-decomposition, escalation log, gate boundaries, NPS alignment notes. |
 | 0.2.1-draft | 2026-04-24 | Cold-critic revisions: dropped `change_class_hint` dead field from v1 log schema (§4.4), added `decomposer_timeout_ms` config + NOP DAG limit enforcement (§5.2, §5.3), added flock concurrency guard on Dispatcher state-file access (§6.2), specified Dispatcher-side partial commit on supersede (§6.4), added pushback resumption ritual (§6.1), flagged trivial-decomposer + tightened-persona incompatibility (§5.4). Post-round-2: dropped delegation-depth check (misapplied — kit has no sub-worker delegation); renumbered §5.4/§5.5. Post-round-3: synced §6.4 with issue-04 (`--no-verify`, HEAD-state check, per-node event granularity); complex-HEAD workers route via existing `blocked` status instead of a new enum value. Post-round-4: gated `active_version` flip on full v_N drain — complex-HEAD `blocked` nodes prevent silent version advance past untriaged worktrees (§6.4 step 6). Post-round-5: supersede pass now iterates all v_N nodes (not just `running`); pushback-blocked workers (with result file) resolve as `pushback_superseded`, complex-HEAD-blocked gate drain correctly; renamed `NOP-SUPERSEDE-INCOMPLETE` to `KIT-SUPERSEDE-INCOMPLETE` (kit-specific, not NOP canon); added `supersede_resolved` event for OSer manual triage audit. Post-round-6: terminal v_N nodes archive via branch rename (event `supersede_archived`) — prevents `cmd_merge` picking up orphan v_N branches after version flip (§6.4 step 1). |
 | 0.2.2-draft | 2026-04-24 | §4.5 plan_id optionality sync with #61 ruling A — TS snippet and prose updated to `plan_id?: string` (optional in v1, required post-#63). Closes #74. |
+| 0.2.3-draft | 2026-04-24 | §4.6 added: four JSON Schema documents under `src/schemas/`, Python validator at `scripts/lib/validate_schema.py`, forward-reference to `cmd_decompose` validation hook (#66). Closes #62. |

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloverthe.ai/schemas/orch-kit/v1/escalation-event.schema.json",
+  "title": "EscalationEvent",
+  "description": "Append-only escalation log entry (JSONL). Mirrors EscalationEvent in nop-types.ts.",
+  "type": "object",
+  "required": ["schema_version", "timestamp", "plan_id", "prior_version", "pushback_source", "pushback_reason", "dispatcher_acted", "decomposer_output_version", "osi_ack_at", "osi_ack_verdict", "duration_s", "escalation_level"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "prior_version": {
+      "type": ["integer", "null"]
+    },
+    "pushback_source": {
+      "type": ["string", "null"]
+    },
+    "pushback_reason": {
+      "type": ["string", "null"]
+    },
+    "dispatcher_acted": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invoked_decomposer",
+            "escalated_to_oser",
+            "decomposer_failed",
+            "retried",
+            "supersede_applied",
+            "supersede_archived",
+            "supersede_complex_state",
+            "pushback_superseded",
+            "supersede_resolved",
+            "osi_acked",
+            "manual_merge_override",
+            "supersede_gc"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decomposer_output_version": {
+      "type": ["integer", "null"]
+    },
+    "osi_ack_at": {
+      "type": ["string", "null"]
+    },
+    "osi_ack_verdict": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["approve", "reject", "amend"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "duration_s": {
+      "type": ["number", "null"]
+    },
+    "escalation_level": {
+      "type": "string",
+      "enum": ["task", "version"]
+    }
+  }
+}

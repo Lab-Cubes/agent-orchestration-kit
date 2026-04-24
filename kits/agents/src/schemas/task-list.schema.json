@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloverthe.ai/schemas/orch-kit/v1/task-list.schema.json",
+  "title": "TaskListMessage",
+  "description": "Versioned task-list emitted by the Decomposer (NPS-5 §3.1). Mirrors TaskListMessage in nop-types.ts.",
+  "type": "object",
+  "required": ["_ncp", "type", "schema_version", "plan_id", "version_id", "created_at", "created_by", "prior_version", "pushback_reason", "dag"],
+  "additionalProperties": false,
+  "properties": {
+    "_ncp": {
+      "type": "integer",
+      "const": 1
+    },
+    "type": {
+      "type": "string",
+      "const": "task_list"
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "version_id": {
+      "type": "integer"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "prior_version": {
+      "type": ["integer", "null"]
+    },
+    "pushback_reason": {
+      "type": ["string", "null"]
+    },
+    "dag": {
+      "type": "object",
+      "required": ["nodes", "edges"],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskNode"
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskEdge"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "TaskNode": {
+      "type": "object",
+      "required": ["id", "action", "agent", "input_from", "input_mapping", "scope", "budget_npt", "timeout_ms", "retry_policy", "condition", "success_criteria"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "input_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "input_mapping": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "budget_npt": {
+          "type": "integer"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "retry_policy": {
+          "type": "object",
+          "required": ["max_retries", "backoff_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "max_retries": {
+              "type": "integer"
+            },
+            "backoff_ms": {
+              "type": "integer"
+            }
+          }
+        },
+        "condition": {
+          "type": ["string", "null"]
+        },
+        "success_criteria": {
+          "type": "object"
+        }
+      }
+    },
+    "TaskEdge": {
+      "type": "object",
+      "required": ["from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
