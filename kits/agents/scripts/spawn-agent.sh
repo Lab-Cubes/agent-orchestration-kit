@@ -1607,26 +1607,489 @@ PYEOF
     echo "$acked_file"
 }
 
+# --- dispatch-tasklist ---
+# cmd_dispatch_tasklist: consume an acked task-list, walk the DAG, spawn workers.
+#
+# One-shot per dispatch (architecture.md §6.2). Acquires an exclusive non-blocking
+# advisory lock via Python fcntl — no `flock` CLI dependency. Second invocation
+# fails fast with a clear error.
+# Writes task-list-state.json atomically on every node transition (tmp + mv).
+# Graph walk is wave-based: each iteration dispatches all currently-runnable
+# nodes in parallel, waits for completion, then repeats until all nodes are
+# terminal. No async — cmd_dispatch subprocess handles the worker lifecycle.
+#
+# Exit codes:
+#   0  — all nodes completed successfully
+#   1  — one or more nodes failed (or dependency blocked by failed dep)
+#   2  — invocation error (bad args, missing task-list, config error)
+cmd_dispatch_tasklist() {
+    # --help
+    if [[ "${1:-}" == "--help" ]]; then
+        cat <<'HELP'
+cmd_dispatch_tasklist — consume acked task-list, spawn workers, track state
+
+Usage:
+  spawn-agent.sh dispatch-tasklist <plan-id> [--version N]
+
+Arguments:
+  plan-id          Plan identifier (must have an acked task-list)
+  --version N      Use specific acked version vN.json (default: latest)
+
+Exit codes:
+  0  — all nodes completed
+  1  — one or more nodes failed, or dispatcher error during graph walk
+  2  — invocation error (bad args, missing/unacked task-list)
+
+Lock semantics:
+  Acquires an exclusive non-blocking advisory lock on
+  $NPS_TASKLISTS_HOME/{plan-id}/.dispatcher.lock via Python fcntl.
+  A second concurrent invocation for the same plan-id exits immediately with
+  exit code 1 and a clear error — no queuing.
+
+State file:
+  $NPS_TASKLISTS_HOME/{plan-id}/task-list-state.json
+  Written on dispatch start (all nodes pending), updated on every node
+  transition (running → completed|failed). Writes are atomic: tmp file + mv.
+  merge_hold: true is set throughout; enforcement lands in #64.
+
+Escalation log:
+  $NPS_TASKLISTS_HOME/{plan-id}/escalation.jsonl
+  Per-node events (escalation_level: "task") on failure.
+  Version-level event (escalation_level: "version") on completion.
+HELP
+        return 0
+    fi
+
+    # ---- Arg parsing ----
+    local plan_id=""
+    local version_override=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --version) version_override="$2"; shift 2 ;;
+            -*)        err "cmd_dispatch_tasklist: unknown option: $1"; exit 2 ;;
+            *)
+                if [[ -z "$plan_id" ]]; then
+                    plan_id="$1"
+                else
+                    err "cmd_dispatch_tasklist: unexpected argument: $1"
+                    exit 2
+                fi
+                shift ;;
+        esac
+    done
+
+    if [[ -z "$plan_id" ]]; then
+        err "Usage: spawn-agent.sh dispatch-tasklist <plan-id> [--version N]"
+        exit 2
+    fi
+
+    local plan_dir="$NPS_TASKLISTS_HOME/$plan_id"
+    mkdir -p "$plan_dir"
+
+    # ---- Advisory lock: non-blocking — fail fast if another dispatcher is active ----
+    # Uses Python fcntl.flock (POSIX, cross-platform) — no `flock` CLI dependency.
+    # A named FIFO synchronises lock acquisition: Python writes "ok" on success or
+    # "fail" on LOCK_NB refusal; bash reads it before proceeding.
+    local lock_file="$plan_dir/.dispatcher.lock"
+    local _lock_fifo _lock_pid
+    _lock_fifo=$(mktemp -u)
+    mkfifo "$_lock_fifo" || { err "cmd_dispatch_tasklist: failed to create lock fifo"; exit 2; }
+
+    python3 - "$lock_file" "$_lock_fifo" <<'PYEOF' &
+import fcntl, sys, time
+lf = open(sys.argv[1], 'w')
+try:
+    fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with open(sys.argv[2], 'w') as f:
+        f.write('ok\n')
+    # Hold lock until killed (SIGTERM from parent when function exits)
+    while True:
+        time.sleep(3600)
+except IOError:
+    with open(sys.argv[2], 'w') as f:
+        f.write('fail\n')
+PYEOF
+    _lock_pid=$!
+
+    # Block until Python signals lock result (FIFO rendezvous)
+    local _lock_result
+    _lock_result=$(cat "$_lock_fifo")
+    rm -f "$_lock_fifo"
+
+    if [[ "$_lock_result" != "ok" ]]; then
+        wait "$_lock_pid" 2>/dev/null || true
+        err "cmd_dispatch_tasklist: another dispatcher is already running for plan $plan_id"
+        exit 1
+    fi
+
+    # ---- Find acked task-list file ----
+    local task_list_file=""
+    if [[ -n "$version_override" ]]; then
+        task_list_file="$plan_dir/v${version_override}.json"
+        if [[ ! -f "$task_list_file" ]]; then
+            if [[ -f "$plan_dir/pending/v${version_override}.json" ]]; then
+                err "cmd_dispatch_tasklist: v${version_override} is in pending/ — ack first:"
+                err "  spawn-agent.sh ack $plan_id $version_override"
+            else
+                err "cmd_dispatch_tasklist: no acked task-list v${version_override} for plan $plan_id"
+            fi
+            kill "$_lock_pid" 2>/dev/null || true
+            exit 2
+        fi
+    else
+        # Latest acked version: highest-numbered vN.json directly in plan_dir (not pending/)
+        task_list_file=$(python3 - "$plan_dir" <<'PYEOF'
+import os, sys
+d = sys.argv[1]
+if not os.path.isdir(d):
+    sys.exit(1)
+vers = []
+for f in os.listdir(d):
+    if f.startswith('v') and f.endswith('.json') and f[1:-5].isdigit():
+        full = os.path.join(d, f)
+        if os.path.isfile(full):
+            vers.append((int(f[1:-5]), full))
+if not vers:
+    sys.exit(1)
+vers.sort(key=lambda x: x[0])
+print(vers[-1][1])
+PYEOF
+        ) || true
+        if [[ -z "$task_list_file" ]]; then
+            err "cmd_dispatch_tasklist: no acked task-list for plan $plan_id"
+            err "  Run: spawn-agent.sh ack $plan_id <version>"
+            kill "$_lock_pid" 2>/dev/null || true
+            exit 2
+        fi
+    fi
+
+    log "cmd_dispatch_tasklist: plan=$plan_id, task-list=$(basename "$task_list_file")"
+
+    # ---- Parse task-list: emit unit-separator-delimited node rows ----
+    # Separator: \x1f (ASCII 31, unit separator) — non-whitespace so empty
+    # scope_csv fields don't collapse when read by IFS=$'\037' read.
+    # Format: node_id \x1f agent_id \x1f action \x1f scope_csv \x1f budget_npt \x1f timeout_s
+    local node_data_file
+    node_data_file=$(mktemp)
+
+    local parse_out
+    parse_out=$(python3 - "$task_list_file" <<'PYEOF'
+import json, sys
+SEP = '\x1f'
+d = json.load(open(sys.argv[1]))
+print(f"VERSION_ID={d['version_id']}")
+print(f"PLAN_ID_TL={d['plan_id']}")
+for n in d['dag']['nodes']:
+    agent_id = n['agent'].split(':')[-1]
+    scope_csv = ','.join(n.get('scope') or [])
+    timeout_s = str(int(n.get('timeout_ms', 600000) // 1000))
+    print(f"NODE={n['id']}{SEP}{agent_id}{SEP}{n['action']}{SEP}{scope_csv}{SEP}{n['budget_npt']}{SEP}{timeout_s}")
+PYEOF
+    ) || { err "cmd_dispatch_tasklist: failed to parse task-list JSON"; rm -f "$node_data_file"; kill "$_lock_pid" 2>/dev/null || true; exit 2; }
+
+    local version_id=""
+    local node_ids=()
+    # Parallel arrays indexed by position (bash 3.2 — no declare -A)
+    local _agents=() _actions=() _scopes=() _budgets=() _timeouts=()
+
+    while IFS= read -r line; do
+        case "${line%%=*}" in
+            VERSION_ID)  version_id="${line#*=}" ;;
+            PLAN_ID_TL)  ;;   # already have plan_id from arg
+            NODE)
+                # IFS=$'\037' (non-whitespace) so empty scope_csv fields are preserved
+                IFS=$'\037' read -r nid agent_id action scope_csv budget timeout_s \
+                    <<< "${line#NODE=}"
+                node_ids+=("$nid")
+                _agents+=("$agent_id")
+                _actions+=("$action")
+                _scopes+=("$scope_csv")
+                _budgets+=("$budget")
+                _timeouts+=("$timeout_s")
+                # Also write tab-delimited to node_data_file for awk-based lookups
+                printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+                    "$nid" "$agent_id" "$action" "$scope_csv" "$budget" "$timeout_s" \
+                    >> "$node_data_file"
+                ;;
+        esac
+    done <<< "$parse_out"
+
+    if [[ ${#node_ids[@]} -eq 0 ]]; then
+        log "cmd_dispatch_tasklist: task-list has no nodes — nothing to dispatch"
+        rm -f "$node_data_file"
+        kill "$_lock_pid" 2>/dev/null || true
+        exit 0
+    fi
+
+    log "cmd_dispatch_tasklist: ${#node_ids[@]} node(s), version=$version_id"
+
+    # ---- Helper: look up a field for a node_id from node_data_file (awk) ----
+    # Fields: 1=node_id 2=agent_id 3=action 4=scope_csv 5=budget 6=timeout_s
+    _dt_node_field() {
+        awk -F'\t' -v nid="$1" -v f="$2" '$1==nid{print $f; exit}' "$node_data_file"
+    }
+
+    # ---- State file paths ----
+    local state_file="$plan_dir/task-list-state.json"
+    local state_tmp="$plan_dir/.task-list-state.json.tmp"
+    local escalation_log="$plan_dir/escalation.jsonl"
+
+    # ---- Init state file (all nodes pending) if not already present ----
+    if [[ ! -f "$state_file" ]]; then
+        python3 - "$task_list_file" "$state_tmp" <<'PYEOF'
+import json, sys
+from datetime import datetime, timezone
+tl = json.load(open(sys.argv[1]))
+now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+state = {
+    "schema_version": 1,
+    "plan_id": tl['plan_id'],
+    "active_version": tl['version_id'],
+    "superseded_versions": [],
+    "node_states": {
+        n['id']: {
+            "status": "pending", "task_id": None,
+            "started_at": None, "completed_at": None,
+            "result_path": None, "retries": 0,
+        }
+        for n in tl['dag']['nodes']
+    },
+    "merge_hold": True,
+    "updated_at": now,
+}
+with open(sys.argv[2], 'w') as f:
+    json.dump(state, f, indent=2)
+    f.write('\n')
+PYEOF
+        mv "$state_tmp" "$state_file"
+        log "cmd_dispatch_tasklist: state initialized (all nodes pending)"
+    else
+        log "cmd_dispatch_tasklist: resuming from existing state"
+    fi
+
+    # ---- Helper: append escalation event ----
+    _dt_append_event() {
+        # Args: dispatcher_acted_or_null  pushback_source_or_null  escalation_level
+        python3 - "$escalation_log" "$plan_id" "$version_id" "$1" "$2" "$3" <<'PYEOF'
+import json, os, sys
+from datetime import datetime, timezone
+log_p, plan_id, ver_str, disp_acted, pb_src, level = sys.argv[1:]
+now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+event = {
+    "schema_version": 1,
+    "timestamp": now,
+    "plan_id": plan_id,
+    "prior_version": None,
+    "pushback_source": None if pb_src == 'null' else pb_src,
+    "pushback_reason": None,
+    "dispatcher_acted": None if disp_acted == 'null' else disp_acted,
+    "decomposer_output_version": int(ver_str) if ver_str.isdigit() else None,
+    "osi_ack_at": None,
+    "osi_ack_verdict": None,
+    "osi_ack_by": None,
+    "duration_s": None,
+    "escalation_level": level,
+}
+os.makedirs(os.path.dirname(log_p) or '.', exist_ok=True)
+with open(log_p, 'a') as f:
+    f.write(json.dumps(event) + '\n')
+PYEOF
+    }
+
+    # ---- Helper: update a single node's state (atomic write) ----
+    # Args: node_id  new_status  task_id_or_null  result_path_or_null
+    _dt_update_node() {
+        python3 - "$state_file" "$state_tmp" "$1" "$2" "$3" "$4" <<'PYEOF'
+import json, os, sys
+from datetime import datetime, timezone
+sf, tmp, node_id, new_status, task_id, result_path = sys.argv[1:]
+now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+d = json.load(open(sf))
+ns = d['node_states'][node_id]
+ns['status'] = new_status
+if task_id != 'null':
+    ns['task_id'] = task_id
+if new_status == 'running':
+    ns['started_at'] = now
+elif new_status in ('completed', 'failed'):
+    ns['completed_at'] = now
+    if result_path != 'null':
+        ns['result_path'] = result_path
+d['updated_at'] = now
+with open(tmp, 'w') as f:
+    json.dump(d, f, indent=2)
+    f.write('\n')
+os.replace(tmp, sf)
+PYEOF
+    }
+
+    # ---- Graph walk loop ----
+    # Wave-based: each iteration dispatches all currently-runnable nodes in
+    # parallel, waits for completion, then checks terminal state and repeats.
+    # Runnable: status=pending AND all input_from nodes are completed.
+    local any_failed=false
+    local max_waves=$(( ${#node_ids[@]} + 1 ))
+    local wave=0
+
+    while (( wave < max_waves )); do
+        (( wave += 1 ))
+
+        # --- Check terminal state and find runnable nodes ---
+        local graph_out
+        graph_out=$(python3 - "$state_file" "$task_list_file" <<'PYEOF'
+import json, sys
+state = json.load(open(sys.argv[1]))
+tl    = json.load(open(sys.argv[2]))
+ns    = state['node_states']
+terminal = {'completed', 'failed', 'superseded'}
+all_t    = all(v['status'] in terminal for v in ns.values())
+any_f    = any(v['status'] == 'failed'  for v in ns.values())
+inp_map  = {n['id']: n.get('input_from') or [] for n in tl['dag']['nodes']}
+runnable = [
+    nid for nid, v in ns.items()
+    if v['status'] == 'pending'
+    and all(ns.get(dep, {}).get('status') == 'completed' for dep in inp_map[nid])
+]
+print(f"ALL_TERMINAL={'true' if all_t else 'false'}")
+print(f"ANY_FAILED={'true' if any_f else 'false'}")
+print(f"RUNNABLE={' '.join(runnable)}")
+PYEOF
+        )
+
+        local all_terminal="" any_failed_flag="" runnable_str=""
+        while IFS='=' read -r key val; do
+            case "$key" in
+                ALL_TERMINAL) all_terminal="$val" ;;
+                ANY_FAILED)   any_failed_flag="$val" ;;
+                RUNNABLE)     runnable_str="$val" ;;
+            esac
+        done <<< "$graph_out"
+
+        [[ "$any_failed_flag" == "true" ]] && any_failed=true
+        [[ "$all_terminal" == "true" ]] && break
+
+        if [[ -z "$runnable_str" ]]; then
+            # No runnable nodes and not yet terminal → failed deps block progress
+            err "cmd_dispatch_tasklist: no runnable nodes — blocked by failed dependency"
+            any_failed=true
+            break
+        fi
+
+        # --- Dispatch all runnable nodes in parallel ---
+        local wave_tmp_dir
+        wave_tmp_dir=$(mktemp -d)
+
+        for node_id in $runnable_str; do
+            local agent_id action scope_csv budget timeout_s
+            agent_id=$(_dt_node_field "$node_id" 2)
+            action=$(_dt_node_field   "$node_id" 3)
+            scope_csv=$(_dt_node_field "$node_id" 4)
+            budget=$(_dt_node_field    "$node_id" 5)
+            timeout_s=$(_dt_node_field "$node_id" 6)
+
+            local dispatch_log="$wave_tmp_dir/$node_id.log"
+
+            local -a dispatch_args=("$agent_id" "$action" \
+                "--budget" "$budget" "--time-limit" "$timeout_s")
+            [[ -n "$scope_csv" ]] && dispatch_args+=("--scope" "$scope_csv")
+
+            log "cmd_dispatch_tasklist: dispatching node $node_id → agent $agent_id"
+            "$0" dispatch "${dispatch_args[@]}" > "$dispatch_log" 2>&1 &
+            echo "$!" > "$wave_tmp_dir/$node_id.pid"
+
+            # Mark running; task_id resolved after dispatch completes
+            _dt_update_node "$node_id" "running" "null" "null"
+        done
+
+        # --- Wait for each node's dispatch process and update state ---
+        for node_id in $runnable_str; do
+            local pid_file="$wave_tmp_dir/$node_id.pid"
+            local dispatch_log="$wave_tmp_dir/$node_id.log"
+            local pid
+            pid=$(cat "$pid_file")
+
+            local node_exit=0
+            wait "$pid" || node_exit=$?
+
+            # Extract task_id from the dispatch log ("Intent created: task-xxx")
+            local task_id
+            task_id=$(grep 'Intent created:' "$dispatch_log" 2>/dev/null \
+                | sed 's/.*Intent created:[[:space:]]*//' \
+                | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1 || true)
+
+            # Find result file via task_id
+            local result_file="null"
+            if [[ -n "$task_id" ]]; then
+                local candidate="$NPS_AGENTS_HOME/$(_dt_node_field "$node_id" 2)/done/${task_id}.result.json"
+                [[ -f "$candidate" ]] && result_file="$candidate"
+            fi
+
+            # Determine node outcome from result payload
+            local node_status="failed"
+            if [[ "$result_file" != "null" ]]; then
+                node_status=$(python3 - "$result_file" <<'PYEOF'
+import json, sys
+try:
+    p = json.load(open(sys.argv[1])).get('payload', {})
+    print('completed' if p.get('status') == 'completed' else 'failed')
+except Exception:
+    print('failed')
+PYEOF
+                )
+            fi
+
+            _dt_update_node "$node_id" "$node_status" "${task_id:-null}" "$result_file"
+
+            if [[ "$node_status" == "failed" ]]; then
+                any_failed=true
+                _dt_append_event "escalated_to_oser" "${task_id:-null}" "task"
+                log "cmd_dispatch_tasklist: node $node_id FAILED"
+            else
+                log "cmd_dispatch_tasklist: node $node_id completed"
+            fi
+        done
+
+        rm -rf "$wave_tmp_dir"
+    done
+
+    # ---- Final version-level escalation event ----
+    _dt_append_event "null" "null" "version"
+
+    rm -f "$node_data_file"
+    # Release lock: kill Python lock holder (releases fcntl lock when process exits)
+    kill "$_lock_pid" 2>/dev/null || true
+    wait "$_lock_pid" 2>/dev/null || true
+
+    log "cmd_dispatch_tasklist: dispatch complete (plan=$plan_id, version=$version_id)"
+
+    if $any_failed; then
+        exit 1
+    fi
+    exit 0
+}
+
 # --- Main ---
 case "${1:-help}" in
-    ack)        shift; cmd_ack "$@" ;;
-    clean)      shift; cmd_clean "$@" ;;
-    decompose)  shift; cmd_decompose "$@" ;;
-    dispatch)   shift; cmd_dispatch "$@" ;;
-    merge)      shift; cmd_merge "$@" ;;
-    setup)      shift; cmd_setup "$@" ;;
-    status)     shift; cmd_status "$@" ;;
+    ack)               shift; cmd_ack "$@" ;;
+    clean)             shift; cmd_clean "$@" ;;
+    decompose)         shift; cmd_decompose "$@" ;;
+    dispatch)          shift; cmd_dispatch "$@" ;;
+    dispatch-tasklist) shift; cmd_dispatch_tasklist "$@" ;;
+    merge)             shift; cmd_merge "$@" ;;
+    setup)             shift; cmd_setup "$@" ;;
+    status)            shift; cmd_status "$@" ;;
     *)
         echo "spawn-agent.sh — NOP worker lifecycle manager"
         echo ""
         echo "Commands:"
-        echo "  ack       <plan-id> <version>     Approve pending task-list version"
-        echo "  clean     <agent-id>              Remove stale artifacts"
-        echo "  decompose                         Plan → Decomposer → pending task-list"
-        echo "  dispatch  <agent-id> \"<intent>\"   Launch worker on a task"
-        echo "  merge     <task-id> [\"msg\"]       Squash-merge worktree branch"
-        echo "  setup     <agent-id> <type>       Create worker dir + CLAUDE.md"
-        echo "  status    <agent-id>              Show mailbox + latest result"
+        echo "  ack               <plan-id> <version>   Approve pending task-list version"
+        echo "  clean             <agent-id>            Remove stale artifacts"
+        echo "  decompose                               Plan → Decomposer → pending task-list"
+        echo "  dispatch          <agent-id> \"<intent>\" Launch worker on a task"
+        echo "  dispatch-tasklist <plan-id> [--version] Dispatch full task-list DAG"
+        echo "  merge             <task-id> [\"msg\"]     Squash-merge worktree branch"
+        echo "  setup             <agent-id> <type>     Create worker dir + CLAUDE.md"
+        echo "  status            <agent-id>            Show mailbox + latest result"
         echo ""
         echo "Decompose options:"
         echo "  --help               Print protocol summary (input, output, exit codes)"
