@@ -26,6 +26,19 @@ export type {
 } from "./nop-types.js";
 
 // -----------------------------------------------------------------------------
+// Phased-dispatch types (#45) — re-exported from ./nop-types
+// -----------------------------------------------------------------------------
+
+export type {
+  TaskListMessage,
+  TaskNode,
+  TaskEdge,
+  TaskListState,
+  NodeState,
+  EscalationEvent,
+} from "./nop-types.js";
+
+// -----------------------------------------------------------------------------
 // Task Lifecycle — filesystem layer (kit-specific, not wire protocol)
 // -----------------------------------------------------------------------------
 
