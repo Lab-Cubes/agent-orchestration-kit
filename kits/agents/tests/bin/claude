@@ -119,7 +119,7 @@ PYEOF
             if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
             prev="$arg"
         done
-        task_id=$(echo "$prompt_text" | grep -oP 'task-[a-z0-9_-]+' | head -1)
+        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-z0-9_-]+' | head -1)
         if [[ -n "$task_id" ]]; then
             mkdir -p done
             cat > "done/${task_id}.result.json" <<REOF
@@ -148,7 +148,7 @@ REOF
             if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
             prev="$arg"
         done
-        task_id=$(echo "$prompt_text" | grep -oP 'task-[a-z0-9_-]+' | head -1)
+        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-z0-9_-]+' | head -1)
         scope_dir="${MOCK_SCOPE_DIR:?MOCK_SCOPE_DIR must be set for scope_clean mode}"
         if [[ -n "$task_id" ]]; then
             mkdir -p done
