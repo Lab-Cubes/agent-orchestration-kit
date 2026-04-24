@@ -60,6 +60,77 @@ _init_repo() {
     [ "$status" -ne 0 ]
 }
 
+@test "#40 cmd_merge: fails cleanly on squash-merge conflict" {
+    export MOCK_CLAUDE_MODE=happy
+
+    local scope_repo="$KIT_TREE/conflict-repo"
+    _init_repo "$scope_repo"
+    git -C "$scope_repo" config user.email "t@t.local"
+    git -C "$scope_repo" config user.name "t"
+
+    # Commit a file on main that will become the conflict base
+    echo "base" > "$scope_repo/conflict.txt"
+    git -C "$scope_repo" add conflict.txt
+    git -C "$scope_repo" -c user.email=t@t.local -c user.name=t commit -m "add conflict.txt" -q
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "conflict test" \
+        --scope "$scope_repo" --category code --time-limit 60
+
+    local branch_file task_id worktree
+    branch_file=$(ls "$KIT_AGENTS/coder-01/done/"*.branch.json 2>/dev/null | head -1)
+    [ -f "$branch_file" ]
+    task_id=$(python3 -c "import json; print(json.load(open('$branch_file'))['task_id'])")
+    worktree=$(python3 -c "import json; print(json.load(open('$branch_file'))['worktree'])")
+
+    # Worker commits a change on the worktree branch
+    echo "worker-line" > "$worktree/conflict.txt"
+    git -C "$worktree" add conflict.txt
+    git -C "$worktree" -c user.email=t@t.local -c user.name=t commit -m "worker change" -q
+
+    # Conflicting commit on main after the branch point
+    echo "main-conflicting-line" > "$scope_repo/conflict.txt"
+    git -C "$scope_repo" add conflict.txt
+    git -C "$scope_repo" -c user.email=t@t.local -c user.name=t commit -m "conflicting main change" -q
+
+    run run_spawner merge "$task_id" --no-push
+    [ "$status" -ne 0 ]
+}
+
+@test "#40 cmd_merge: fails with clear error when git identity missing" {
+    export MOCK_CLAUDE_MODE=happy
+
+    local scope_repo="$KIT_TREE/identity-repo"
+    _init_repo "$scope_repo"
+    git -C "$scope_repo" config user.email "t@t.local"
+    git -C "$scope_repo" config user.name "t"
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "identity test" \
+        --scope "$scope_repo" --category code --time-limit 60
+
+    local branch_file task_id worktree
+    branch_file=$(ls "$KIT_AGENTS/coder-01/done/"*.branch.json 2>/dev/null | head -1)
+    [ -f "$branch_file" ]
+    task_id=$(python3 -c "import json; print(json.load(open('$branch_file'))['task_id'])")
+    worktree=$(python3 -c "import json; print(json.load(open('$branch_file'))['worktree'])")
+
+    echo "test" > "$worktree/file.txt"
+    git -C "$worktree" add file.txt
+    git -C "$worktree" -c user.email=t@t.local -c user.name=t commit -m "worker commit" -q
+
+    # Remove local git identity; use an isolated HOME so global config can't rescue it
+    git -C "$scope_repo" config --local --unset user.email 2>/dev/null || true
+    git -C "$scope_repo" config --local --unset user.name 2>/dev/null || true
+    mkdir -p "$KIT_TMPDIR/no-git-home"
+
+    run env HOME="$KIT_TMPDIR/no-git-home" GIT_CONFIG_NOSYSTEM=1 \
+        NPS_AGENTS_HOME="$KIT_AGENTS" NPS_WORKTREES_HOME="$KIT_WORKTREES" \
+        NPS_LOGS_HOME="$KIT_LOGS" \
+        "$KIT_SCRIPTS/spawn-agent.sh" merge "$task_id" --no-push
+    [ "$status" -ne 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # result.json schema
 # ---------------------------------------------------------------------------
@@ -113,6 +184,28 @@ assert d['payload']['id'] == '$expected_id'
 print('ok')
 "
     [ "$status" -eq 0 ]
+}
+
+@test "#90 result.json: worker-written result missing required fields surfaces error status" {
+    export MOCK_CLAUDE_MODE=malformed_result_missing_fields
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "malformed result" --category code --time-limit 60
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
+    [ "$status_field" = "error" ]
+}
+
+@test "#90 result.json: worker-written invalid JSON surfaces error status" {
+    export MOCK_CLAUDE_MODE=malformed_result_invalid_json
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "invalid json result" --category code --time-limit 60
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
+    [ "$status_field" = "error" ]
 }
 
 # ---------------------------------------------------------------------------

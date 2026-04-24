@@ -742,6 +742,16 @@ print(json.dumps(result, indent=2))
 PYEOF
     fi
 
+    # --- result.json validation (#90): reject worker-written malformed files ---
+    RESULT_PATH="$agent_result" python3 -c "
+import json, os, sys
+try:
+    d = json.load(open(os.environ['RESULT_PATH']))
+    assert '_ncp' in d and 'payload' in d and '_nop' in d.get('payload', {})
+except Exception:
+    sys.exit(1)
+" 2>/dev/null || { warn "result.json invalid or missing required fields — marking error"; status_val="error"; }
+
     # --- Scope validation (#34): reject files_changed outside constraints.scope ---
     if [[ -n "$original_scope" && -f "$agent_result" ]]; then
         local scope_violations=""

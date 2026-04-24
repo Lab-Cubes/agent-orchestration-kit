@@ -212,8 +212,44 @@ REOF
         printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"Committed to add-dir scope.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
         exit 0
         ;;
+    malformed_result_missing_fields)
+        # Writes a result.json missing required NOP fields (_ncp, payload._nop) to
+        # done/ before exit — test #90. Mock still emits happy stdout so the
+        # dispatch path runs to completion (status comes from our validation fix).
+        prompt_text=""
+        prev=""
+        for arg in "$@"; do
+            if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
+            prev="$arg"
+        done
+        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1)
+        if [[ -n "$task_id" ]]; then
+            mkdir -p done
+            printf '{"bad_field":"missing_required_ncp_and_payload"}' > "done/${task_id}.result.json"
+        fi
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"malformed result mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
+    malformed_result_invalid_json)
+        # Writes truncated (invalid) JSON to result.json in done/ — test #90.
+        prompt_text=""
+        prev=""
+        for arg in "$@"; do
+            if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
+            prev="$arg"
+        done
+        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1)
+        if [[ -n "$task_id" ]]; then
+            mkdir -p done
+            printf '{"_ncp":1,' > "done/${task_id}.result.json"
+        fi
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"invalid json result mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
     *)
-        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|scope_violation|scope_clean|commit_to_scope|commit_to_add_dir)" >&2
+        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|scope_violation|scope_clean|commit_to_scope|commit_to_add_dir|malformed_result_missing_fields|malformed_result_invalid_json)" >&2
         exit 2
         ;;
 esac
