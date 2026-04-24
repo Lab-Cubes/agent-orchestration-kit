@@ -719,6 +719,10 @@ PYEOF
             while IFS= read -r v; do
                 warn "  - $v"
             done <<< "$scope_violations"
+            # CSV status_val='error' is the operator-facing dispatch outcome
+            # (matches the existing error/success convention in the CSV schema).
+            # result.json payload.status='failed' is the NOP wire-protocol status
+            # (must be a valid TaskStatus enum value per NPS-5 §4).
             status_val="error"
             RESULT_FILE="$agent_result" python3 - <<'PYEOF' 2>/dev/null
 import json, os
