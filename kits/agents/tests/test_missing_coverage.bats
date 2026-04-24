@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # test_missing_coverage.bats — tests for issue #40: cmd_merge, result.json
-# schema, malformed intent, and sequential dispatch.
+# schema, malformed intent, and sequential dispatch. #88: atomic-mv claim lock.
 
 load 'helpers/build-kit-tree.bash'
 
@@ -134,4 +134,48 @@ print('ok')
     local csv_rows
     csv_rows=$(wc -l < "$KIT_LOGS/dispatch-costs.csv" | tr -d ' ')
     [ "$csv_rows" -eq 3 ]
+}
+
+# ---------------------------------------------------------------------------
+# Concurrent dispatch — atomic-mv claim lock (#88)
+# ---------------------------------------------------------------------------
+
+@test "#88 concurrent dispatch: atomic-mv claim lock — exactly one winner" {
+    local task_id="task-race-88-$$"
+    local inbox="$KIT_AGENTS/coder-01/inbox"
+    local active="$KIT_AGENTS/coder-01/active"
+    local intent="$inbox/${task_id}.intent.json"
+    local exit_a="$KIT_TMPDIR/race-exit-a"
+    local exit_b="$KIT_TMPDIR/race-exit-b"
+
+    run_spawner setup coder-01 coder
+
+    # Pre-place a minimal NOP intent directly in inbox/ — bypassing cmd_dispatch
+    # so both claimants see the SAME pending file (not two unique dispatches).
+    cat > "$intent" << INTENT
+{"_ncp":1,"type":"intent","intent":"race-test","confidence":1.0,"payload":{"_nop":1,"id":"${task_id}","from":"urn:nps:agent:test.localhost:overseer","to":"urn:nps:agent:test.localhost:coder-01","created_at":"2026-01-01T00:00:00Z","priority":"normal","category":"code","mailbox":{"base":"./"},"context":{},"constraints":{"model":"sonnet","time_limit":60,"scope":[],"budget_npt":1000}}}
+INTENT
+
+    # Race: two subshells both attempt the claim rename concurrently.
+    # POSIX rename(2) is atomic — exactly one will win regardless of timing.
+    (mv "$intent" "$active/${task_id}.intent.json" 2>/dev/null \
+        && echo 0 > "$exit_a" || echo 1 > "$exit_a") &
+    (mv "$intent" "$active/${task_id}.intent.json" 2>/dev/null \
+        && echo 0 > "$exit_b" || echo 1 > "$exit_b") &
+    wait
+
+    local code_a code_b
+    code_a=$(cat "$exit_a")
+    code_b=$(cat "$exit_b")
+
+    # Exactly one mv succeeded (exit 0), the other saw "no such file" (exit 1)
+    [ $((code_a + code_b)) -eq 1 ]
+
+    # Exactly one intent file landed in active/
+    local active_count
+    active_count=$(ls "$active/"*.intent.json 2>/dev/null | wc -l | tr -d ' ')
+    [ "$active_count" -eq 1 ]
+
+    # The inbox is now empty — file was moved, not copied
+    [ ! -f "$intent" ]
 }
