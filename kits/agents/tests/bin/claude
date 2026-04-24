@@ -111,6 +111,65 @@ time.sleep(30)
 PYEOF
         exec python3 "$_tmppy"
         ;;
+    scope_violation)
+        # Writes a result.json with files_changed outside scope.
+        prompt_text=""
+        prev=""
+        for arg in "$@"; do
+            if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
+            prev="$arg"
+        done
+        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-z0-9_-]+' | head -1)
+        if [[ -n "$task_id" ]]; then
+            mkdir -p done
+            cat > "done/${task_id}.result.json" <<REOF
+{
+  "_ncp": 1, "type": "result", "value": "scope violation test",
+  "probability": 1.0, "alternatives": [],
+  "payload": {
+    "_nop": 1, "id": "$task_id", "status": "completed",
+    "from": "urn:nps:agent:test.localhost:coder-01",
+    "picked_up_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:01:00Z",
+    "files_changed": ["/etc/shadow", "/tmp/outside-scope.txt"],
+    "commits": [], "follow_up": [], "duration": 60, "error": null
+  }
+}
+REOF
+        fi
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"scope violation mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
+    scope_clean)
+        # Writes a result.json with files_changed inside scope.
+        prompt_text=""
+        prev=""
+        for arg in "$@"; do
+            if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
+            prev="$arg"
+        done
+        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-z0-9_-]+' | head -1)
+        scope_dir="${MOCK_SCOPE_DIR:?MOCK_SCOPE_DIR must be set for scope_clean mode}"
+        if [[ -n "$task_id" ]]; then
+            mkdir -p done
+            cat > "done/${task_id}.result.json" <<REOF
+{
+  "_ncp": 1, "type": "result", "value": "scope clean test",
+  "probability": 1.0, "alternatives": [],
+  "payload": {
+    "_nop": 1, "id": "$task_id", "status": "completed",
+    "from": "urn:nps:agent:test.localhost:coder-01",
+    "picked_up_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:01:00Z",
+    "files_changed": ["${scope_dir}/src/main.ts"],
+    "commits": [], "follow_up": [], "duration": 60, "error": null
+  }
+}
+REOF
+        fi
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"scope clean mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
     commit_to_scope)
         # Prove the scope-escape attack: write a file into MOCK_COMMIT_DIR (a
         # non-git subdir inside an outer git repo) and commit. git traverses
@@ -154,7 +213,7 @@ PYEOF
         exit 0
         ;;
     *)
-        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|commit_to_scope|commit_to_add_dir)" >&2
+        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|scope_violation|scope_clean|commit_to_scope|commit_to_add_dir)" >&2
         exit 2
         ;;
 esac

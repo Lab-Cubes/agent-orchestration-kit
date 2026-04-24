@@ -470,7 +470,7 @@ PYEOF
         NPS_TIME_LIMIT="$time_limit" \
         NPS_BUDGET="$budget" \
         NPS_ADD_DIRS="$add_dirs" \
-        python3 - <<'PYEOF' 2>&1 || true
+        python3 - <<'PYEOF' 2>&1
 import json, math, os, signal, subprocess, sys, threading
 sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
 from calc_npt import calc_npt, detect_family
@@ -591,7 +591,7 @@ else:
     }
 print(json.dumps(out))
 PYEOF
-    )
+    ) || true
 
     end_time=$(date +%s)
     duration=$((end_time - start_time))
@@ -614,7 +614,7 @@ PYEOF
         # shell code, and the `read` below is `IFS=$'\t'` so newlines/tabs
         # within fields can't corrupt the structure.
         local parse_out
-        parse_out=$(CLEAN_JSON="$clean_json" NPS_DIR="$NPS_DIR" NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" NPS_MODEL="$model" python3 - <<'PYEOF' 2>/dev/null || true
+        parse_out=$(CLEAN_JSON="$clean_json" NPS_DIR="$NPS_DIR" NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" NPS_MODEL="$model" python3 - <<'PYEOF' 2>/dev/null
 import json, os, sys
 sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
 from calc_npt import calc_npt, detect_family
@@ -639,7 +639,7 @@ fields = [
 ]
 print('\t'.join(fields))
 PYEOF
-        )
+        ) || true
         if [[ -n "$parse_out" ]]; then
             IFS=$'\t' read -r result cost_npt denials turns stop_reason status_val <<< "$parse_out"
         else
@@ -665,7 +665,7 @@ PYEOF
         local completed_at
         completed_at=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
         python3 - "$task_id" "$status_val" "$agent_id" "$created_at" "$completed_at" \
-            "$duration" "$cost_npt" "$turns" "$stop_reason" "$ISSUER_DOMAIN" << 'PYEOF' > "$agent_result" 2>/dev/null || true
+            "$duration" "$cost_npt" "$turns" "$stop_reason" "$ISSUER_DOMAIN" << 'PYEOF' > "$agent_result" 2>/dev/null
 import json, sys
 _, task_id, status_val, agent_id, picked_up, completed, duration, cost_npt, turns, stop, issuer_domain = sys.argv
 result = {
@@ -694,6 +694,46 @@ result = {
 }
 print(json.dumps(result, indent=2))
 PYEOF
+    fi
+
+    # --- Scope validation (#34): reject files_changed outside constraints.scope ---
+    if [[ -n "$original_scope" && -f "$agent_result" ]]; then
+        local scope_violations=""
+        scope_violations=$(RESULT_FILE="$agent_result" SCOPE="$original_scope" python3 - <<'PYEOF' 2>/dev/null
+import json, os, sys
+result = json.load(open(os.environ['RESULT_FILE']))
+files_changed = result.get('payload', {}).get('files_changed') or []
+scope_str = os.environ['SCOPE']
+scope_paths = [os.path.realpath(s) for s in scope_str.split(',') if s]
+violations = []
+for f in files_changed:
+    real_f = os.path.realpath(f)
+    if not any(real_f == s or real_f.startswith(s + os.sep) for s in scope_paths):
+        violations.append(f)
+if violations:
+    print('\n'.join(violations))
+PYEOF
+        ) || true
+        if [[ -n "$scope_violations" ]]; then
+            warn "SCOPE VIOLATION: files_changed outside constraints.scope:"
+            while IFS= read -r v; do
+                warn "  - $v"
+            done <<< "$scope_violations"
+            # CSV status_val='error' is the operator-facing dispatch outcome
+            # (matches the existing error/success convention in the CSV schema).
+            # result.json payload.status='failed' is the NOP wire-protocol status
+            # (must be a valid TaskStatus enum value per NPS-5 §4).
+            status_val="error"
+            RESULT_FILE="$agent_result" python3 - <<'PYEOF' 2>/dev/null
+import json, os
+path = os.environ['RESULT_FILE']
+d = json.load(open(path))
+d['payload']['error'] = (d['payload'].get('error') or '') + ' SCOPE VIOLATION: files_changed outside constraints.scope'
+d['payload']['status'] = 'failed'
+d['payload']['_scope_violation'] = True
+open(path, 'w').write(json.dumps(d, indent=2) + '\n')
+PYEOF
+        fi
     fi
 
     # Append to cost log (CSV)
@@ -799,7 +839,7 @@ cmd_merge() {
 
     local branch="" worktree="" original_scope="" agent_id="" target_branch=""
     local meta_out
-    meta_out=$(python3 - "$branch_file" <<'PYEOF' 2>/dev/null || true
+    meta_out=$(python3 - "$branch_file" <<'PYEOF' 2>/dev/null
 import json, sys
 d = json.load(open(sys.argv[1]))
 print('\t'.join([
@@ -810,7 +850,7 @@ print('\t'.join([
     d.get('target_branch', 'main'),
 ]))
 PYEOF
-    )
+    ) || true
     if [[ -n "$meta_out" ]]; then
         IFS=$'\t' read -r branch worktree original_scope agent_id target_branch <<< "$meta_out"
     fi
