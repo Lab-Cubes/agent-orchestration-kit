@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Mock Kiro CLI — emits plaintext (not stream-json) like real kiro-cli.
+set -u
+
+if [[ -n "${MOCK_CLAUDE_ARGS_FILE:-}" ]]; then
+    echo "kiro-cli $@" >> "$MOCK_CLAUDE_ARGS_FILE"
+fi
+
+MODE="${MOCK_CLAUDE_MODE:-happy}"
+
+case "$MODE" in
+    happy)
+        echo "Mock Kiro worker completed task successfully."
+        echo "Created models.py, db.py, cli.py"
+        exit 0
+        ;;
+    error)
+        echo "Mock Kiro error occurred." >&2
+        exit 1
+        ;;
+    *)
+        echo "mock kiro-cli: unknown MOCK_CLAUDE_MODE='$MODE'" >&2
+        exit 2
+        ;;
+esac

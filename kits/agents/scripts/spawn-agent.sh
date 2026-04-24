@@ -76,6 +76,7 @@ DEFAULT_MAX_TURNS=100
 DEFAULT_BUDGET_NPT=20000
 DEFAULT_SHUTDOWN_GRACE_S=15
 DEFAULT_SOFT_CAP_RATIO=0.9
+DEFAULT_RUNTIME="claude"
 NPT_EXCHANGE_RATES_JSON='{"unknown":1.0}'
 
 if [[ -f "$CONFIG_FILE" ]]; then
@@ -99,6 +100,7 @@ print(f"DEFAULT_MAX_TURNS={d.get('default_max_turns', 100)}")
 print(f"DEFAULT_BUDGET_NPT={d.get('default_budget_npt', 40000)}")
 print(f"DEFAULT_SHUTDOWN_GRACE_S={d.get('default_shutdown_grace_s', 15)}")
 print(f"DEFAULT_SOFT_CAP_RATIO={d.get('default_soft_cap_ratio', 0.9)}")
+print(f"DEFAULT_RUNTIME={d.get('runtime', 'claude')}")
 _raw = d.get('npt_exchange_rates') or dict()
 _rates = dict((k, v) for k, v in _raw.items() if not k.startswith('$'))
 _fallback = dict((('unknown', 1.0),))
@@ -237,8 +239,26 @@ cmd_dispatch() {
     local intent_text="$1"
     shift
 
-    if ! claude --help 2>&1 | grep -q -- '--setting-sources'; then
-        err "claude CLI missing required --setting-sources flag — upgrade Claude Code CLI"
+    # Runtime defaults to config; --runtime override parsed from remaining args
+    local runtime="$DEFAULT_RUNTIME"
+    local _arg
+    for _arg in "$@"; do
+        if [[ "${_prev_arg:-}" == "--runtime" ]]; then runtime="$_arg"; break; fi
+        local _prev_arg="$_arg"
+    done
+
+    if [[ "$runtime" == "claude" ]]; then
+        if ! claude --help 2>&1 | grep -q -- '--setting-sources'; then
+            err "claude CLI missing required --setting-sources flag — upgrade Claude Code CLI"
+            exit 1
+        fi
+    elif [[ "$runtime" == "kiro" ]]; then
+        if ! command -v kiro-cli &>/dev/null; then
+            err "kiro-cli not found — install Kiro CLI"
+            exit 1
+        fi
+    else
+        err "Unknown runtime: $runtime (expected: claude, kiro)"
         exit 1
     fi
 
@@ -283,6 +303,7 @@ PYEOF
             --category)      category="$2"; shift 2 ;;
             --context-file)  context_file="$2"; shift 2 ;;
             --dry-run)       dry_run=true; shift ;;
+            --runtime)       runtime="$2"; shift 2 ;;
             --branch-name)   branch_name_override="$2"; shift 2 ;;
             --target-branch) target_branch="$2"; shift 2 ;;
             *) err "Unknown option: $1"; exit 1 ;;
@@ -457,9 +478,17 @@ PYEOF
     # so blocked readline() calls are interrupted when the process is killed.
     # Emits a single JSON line mirroring --output-format json so the parse
     # block below needs no changes.
+    # For runtimes without --add-dir (e.g. kiro), cd into the worktree
+    # so the worker operates on the right files. Claude uses --add-dir
+    # and runs from the agent dir (mailbox access).
+    local work_dir="$agent_dir"
+    if [[ "$runtime" != "claude" && -n "$worktree_path" ]]; then
+        work_dir="$worktree_path"
+    fi
+
     local output
     output=$(
-        cd "$agent_dir" && \
+        cd "$work_dir" && \
         NPS_DIR="$NPS_DIR" \
         NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" \
         NPS_SHUTDOWN_GRACE_S="$shutdown_grace_s" \
@@ -470,6 +499,7 @@ PYEOF
         NPS_TIME_LIMIT="$time_limit" \
         NPS_BUDGET="$budget" \
         NPS_ADD_DIRS="$add_dirs" \
+        NPS_RUNTIME="$runtime" \
         python3 - <<'PYEOF' 2>&1
 import json, math, os, signal, subprocess, sys, threading
 sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
@@ -485,17 +515,18 @@ soft_cap_ratio  = float(os.environ.get('NPS_SOFT_CAP_RATIO', '0.9'))
 soft_cap        = math.ceil(budget * soft_cap_ratio)
 add_dirs        = os.environ.get('NPS_ADD_DIRS', '').split()
 rates           = json.loads(os.environ.get('NPS_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
-model_family    = detect_family(model)
+runtime_name    = os.environ.get('NPS_RUNTIME', 'claude')
 
-cmd = [
-    'claude', '-p', prompt,
-    '--model', model,
-    '--permission-mode', 'dontAsk',
-    '--allowedTools', 'Read,Edit,Write,Bash,Glob,Grep',
-    '--setting-sources', 'project,local',
-    '--max-turns', str(max_turns),
-    '--output-format', 'stream-json',
-] + add_dirs
+# Load adapter by runtime name
+if runtime_name == 'kiro':
+    from adapters.kiro import KiroAdapter
+    adapter = KiroAdapter()
+else:
+    from adapters.claude import ClaudeAdapter
+    adapter = ClaudeAdapter()
+
+model_family = adapter.model_family(model)
+cmd = adapter.build_cmd(prompt, model, max_turns, add_dirs)
 
 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                         text=True, bufsize=1)
@@ -521,16 +552,12 @@ timer.start()
 events = []
 try:
     for raw in proc.stdout:
-        line = raw.rstrip('\n')
-        if not line:
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
+        event = adapter.parse_event(raw)
+        if event is None:
             continue
         events.append(event)
-        if event.get('type') == 'assistant':
-            u = (event.get('message') or {}).get('usage') or {}
+        u = adapter.extract_usage(event)
+        if u:
             for ch in ('input_tokens', 'output_tokens',
                        'cache_read_input_tokens', 'cache_creation_input_tokens'):
                 state['native'][ch] += u.get(ch) or 0
@@ -538,7 +565,7 @@ try:
             if state['accum_npt'] >= soft_cap and state['stop_reason'] == 'end_turn':
                 state['stop_reason'] = 'soft_cap'
                 try:
-                    proc.send_signal(signal.SIGINT)
+                    proc.send_signal(adapter.shutdown_signal())
                 except Exception:
                     pass
 finally:
@@ -566,17 +593,26 @@ finally:
 
 forced = state['stop_reason'] == 'time_limit' or \
          (state['stop_reason'] == 'soft_cap' and not state['graceful_exit'])
-result_event = next((e for e in reversed(events) if e.get('type') == 'result'), None)
+result_event = None
+for e in reversed(events):
+    r = adapter.extract_result(e)
+    if r is not None:
+        result_event = r
+        break
 
 if result_event and not forced:
-    u = result_event.get('usage') or {}
+    out = result_event
+elif not result_event and not forced and events:
+    # Runtime (e.g. kiro-cli) produced output but no structured result event.
+    # Synthesize a success result from collected text.
+    text_lines = [e.get('content', '') for e in events if e.get('type') == 'text']
     out = {
-        'result':             result_event.get('result', ''),
-        'usage':              u,
-        'num_turns':          result_event.get('num_turns', 0),
-        'stop_reason':        result_event.get('subtype', 'end_turn'),
-        'is_error':           result_event.get('is_error', False),
-        'permission_denials': result_event.get('permission_denials') or [],
+        'result':             '\n'.join(text_lines)[:2000] if text_lines else 'Worker completed (no structured output)',
+        'usage':              state['native'],
+        'num_turns':          1,
+        'stop_reason':        'end_turn',
+        'is_error':           False,
+        'permission_denials': [],
     }
 else:
     u = (result_event or {}).get('usage') or {}
@@ -665,13 +701,14 @@ PYEOF
         local completed_at
         completed_at=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
         python3 - "$task_id" "$status_val" "$agent_id" "$created_at" "$completed_at" \
-            "$duration" "$cost_npt" "$turns" "$stop_reason" "$ISSUER_DOMAIN" << 'PYEOF' > "$agent_result" 2>/dev/null
+            "$duration" "$cost_npt" "$turns" "$stop_reason" "$ISSUER_DOMAIN" "$result" << 'PYEOF' > "$agent_result" 2>/dev/null
 import json, sys
-_, task_id, status_val, agent_id, picked_up, completed, duration, cost_npt, turns, stop, issuer_domain = sys.argv
+_, task_id, status_val, agent_id, picked_up, completed, duration, cost_npt, turns, stop, issuer_domain, worker_result = sys.argv
+fallback_value = worker_result if worker_result and worker_result not in ('NO JSON OUTPUT', 'NO RESULT', 'PARSE ERROR') else f"Fallback result (worker did not complete NOP lifecycle). Stop reason: {stop}. Check raw-output.json."
 result = {
     "_ncp": 1,
     "type": "result",
-    "value": f"Fallback result (worker did not complete NOP lifecycle). Stop reason: {stop}. Check raw-output.json.",
+    "value": fallback_value,
     "probability": 0.5,
     "alternatives": [],
     "payload": {
@@ -914,5 +951,6 @@ case "${1:-help}" in
         echo "  --dry-run          Print intent without launching"
         echo "  --branch-name B    Worktree branch name (default: agent/<id>/<task-id>)"
         echo "  --target-branch B  Merge target (default: auto-detect)"
+        echo "  --runtime NAME     Agent runtime: claude, kiro (default: $DEFAULT_RUNTIME)"
         ;;
 esac
