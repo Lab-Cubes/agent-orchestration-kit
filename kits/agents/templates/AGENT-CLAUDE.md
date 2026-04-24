@@ -122,6 +122,7 @@ When done, write `done/{id}.result.json`:
     "completed_at": "ISO 8601 UTC",
     "duration": 42,
     "cost_npt": 8421,
+    "context_capacity": "fresh | half | tight | imminent",
     "files_changed": ["list of files I modified"],
     "commits": ["abc123 — short commit message"],
     "follow_up": ["new tasks discovered during execution"],
@@ -138,6 +139,7 @@ When done, write `done/{id}.result.json`:
 - Stay within `constraints.scope` — never expand (NPS-5 §3.2 scope carving)
 - Respect `constraints.time_limit` — write timeout result if exceeded
 - Write a result file for EVERY task — even if I fail
+- Include `context_capacity` in every result — self-estimate context window usage
 - Commit changes before writing the result (audit trail)
 - Include `files_changed` and `commits` in result (traceability)
 

@@ -152,6 +152,9 @@ export interface NopIntentPayload {
 
 export type TaskStatus = "completed" | "failed" | "timeout" | "blocked";
 
+/** Worker self-reported context window usage bucket (NPS-5 §56). */
+export type ContextCapacity = "fresh" | "half" | "tight" | "imminent";
+
 export interface NopResultPayload {
   _nop: NopVersion;
   id: string;
@@ -179,6 +182,8 @@ export interface NopResultPayload {
   duration?: number;
   /** NPT consumed executing this task. */
   cost_npt?: number;
+  /** Worker self-reported context capacity bucket. */
+  context_capacity?: ContextCapacity;
   error?: string | null;
 }
 
