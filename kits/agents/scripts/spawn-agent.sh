@@ -538,9 +538,10 @@ proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                         text=True, bufsize=1)
 
 state = {
-    'stop_reason':   'end_turn',
-    'accum_npt':     0,
-    'graceful_exit': False,
+    'stop_reason':        'end_turn',
+    'accum_npt':          0,
+    'graceful_exit':      False,
+    'result_event_seen':  False,
     'native': {'input_tokens': 0, 'output_tokens': 0,
                'cache_read_input_tokens': 0, 'cache_creation_input_tokens': 0},
 }
@@ -562,6 +563,8 @@ try:
         if event is None:
             continue
         events.append(event)
+        if adapter.extract_result(event) is not None:
+            state['result_event_seen'] = True
         u = adapter.extract_usage(event)
         if u:
             for ch in ('input_tokens', 'output_tokens',
@@ -579,7 +582,7 @@ finally:
     if state['stop_reason'] == 'soft_cap':
         try:
             proc.wait(timeout=grace_s)
-            state['graceful_exit'] = True
+            state['graceful_exit'] = state['result_event_seen']
         except subprocess.TimeoutExpired:
             try:
                 proc.terminate()
