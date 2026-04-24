@@ -122,6 +122,7 @@ When done, write `done/{id}.result.json`:
     "completed_at": "ISO 8601 UTC",
     "duration": 42,
     "cost_npt": 8421,
+    "context_capacity": "fresh | half | tight | imminent",
     "files_changed": ["list of files I modified"],
     "commits": ["abc123 — short commit message"],
     "follow_up": ["new tasks discovered during execution"],
@@ -150,6 +151,7 @@ When done, write `done/{id}.result.json`:
 
 **SHOULD:**
 - Create small, focused commits with clear messages
+- Include `context_capacity` in results when estimable — helps the orchestrator decide whether to queue more work
 - Log `follow_up` tasks for work I discover but shouldn't do myself
 - Prefer failing cleanly over partial completion
 
