@@ -4,7 +4,7 @@
   "title": "EscalationEvent",
   "description": "Append-only escalation log entry (JSONL). Mirrors EscalationEvent in nop-types.ts.",
   "type": "object",
-  "required": ["schema_version", "timestamp", "plan_id", "prior_version", "pushback_source", "pushback_reason", "dispatcher_acted", "decomposer_output_version", "osi_ack_at", "osi_ack_verdict", "duration_s", "escalation_level"],
+  "required": ["schema_version", "timestamp", "plan_id", "prior_version", "pushback_source", "pushback_reason", "dispatcher_acted", "decomposer_output_version", "osi_ack_at", "osi_ack_verdict", "osi_ack_by", "duration_s", "escalation_level"],
   "additionalProperties": false,
   "properties": {
     "schema_version": {
@@ -66,6 +66,9 @@
           "type": "null"
         }
       ]
+    },
+    "osi_ack_by": {
+      "type": ["string", "null"]
     },
     "duration_s": {
       "type": ["number", "null"]

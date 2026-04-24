@@ -9,6 +9,7 @@
   "decomposer_output_version": 2,
   "osi_ack_at": "2026-04-24T12:47:45Z",
   "osi_ack_verdict": "approve",
+  "osi_ack_by": "urn:nps:agent:cloverthe.ai:overseer-01",
   "duration_s": 33,
   "escalation_level": "task"
 }
