@@ -1,0 +1,297 @@
+#!/usr/bin/env bats
+# dispatch_tasklist.bats — integration tests for spawn-agent.sh dispatch-tasklist.
+#
+# Tests the DAG walk introduced in #63a across the five canonical graph shapes.
+# Fixture task-lists live in tests/fixtures/task-lists/; all use the mock Claude
+# CLI (tests/bin/claude) so no real LLM calls are made.
+#
+# TODO(#66): Once the Decomposer is complete, add tests that drive the full
+# Plan → Decompose → ack → dispatch-tasklist pipeline end-to-end.
+#
+# Hard cap: 10 test cases.
+
+load 'helpers/build-kit-tree.bash'
+
+setup() {
+    KIT_TMPDIR="$(mktemp -d)"
+    build_kit_tree "$KIT_TMPDIR"
+
+    # Copy schemas into kit tree (validation scripts reference src/schemas/)
+    local source_kit="${BATS_TEST_DIRNAME%/tests}"
+    if [[ -d "$source_kit/src/schemas" ]]; then
+        mkdir -p "$KIT_TREE/src"
+        cp -r "$source_kit/src/schemas" "$KIT_TREE/src/"
+    fi
+
+    # Isolated state homes
+    FIXTURE_ROOT="$KIT_TMPDIR/state"
+    NPS_TASKLISTS_HOME="$FIXTURE_ROOT/task-lists"
+    NPS_PLANS_HOME="$FIXTURE_ROOT/plans"
+    export NPS_TASKLISTS_HOME NPS_PLANS_HOME
+
+    # Provision workers used across fixtures
+    run_spawner setup coder-01 coder
+    run_spawner setup coder-02 coder
+    run_spawner setup coder-03 coder
+
+    FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures/task-lists"
+}
+
+teardown() {
+    rm -rf "${KIT_TMPDIR:-}"
+}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# Run dispatch-tasklist with all isolated-env overrides.
+run_dt() {
+    NPS_AGENTS_HOME="$KIT_AGENTS" \
+    NPS_WORKTREES_HOME="$KIT_WORKTREES" \
+    NPS_LOGS_HOME="$KIT_LOGS" \
+    NPS_PLANS_HOME="$NPS_PLANS_HOME" \
+    NPS_TASKLISTS_HOME="$NPS_TASKLISTS_HOME" \
+    "$KIT_SCRIPTS/spawn-agent.sh" dispatch-tasklist "$@"
+}
+
+# Place a fixture as an acked task-list vN.json for a plan.
+_write_acked() {
+    local plan_id="$1" version="$2" fixture_file="$3"
+    local tl_dir="$NPS_TASKLISTS_HOME/$plan_id"
+    mkdir -p "$tl_dir"
+    cp "$fixture_file" "$tl_dir/v${version}.json"
+}
+
+# Assert all nodes in plan's state file have status=completed.
+_assert_all_completed() {
+    local plan_id="$1"
+    run python3 - "$NPS_TASKLISTS_HOME/$plan_id/task-list-state.json" <<'PYEOF'
+import json, sys
+state = json.load(open(sys.argv[1]))
+bad = [(n, v['status']) for n, v in state['node_states'].items() if v['status'] != 'completed']
+if bad:
+    for n, s in bad: print(f"  {n}: {s}", file=sys.stderr)
+    sys.exit(1)
+print('ok')
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 1. Single-task happy path
+# ---------------------------------------------------------------------------
+
+@test "single-task: node-a completes, state=completed, exit 0" {
+    _write_acked plan-single 1 "$FIXTURES_DIR/single-task.json"
+
+    run run_dt plan-single
+    [ "$status" -eq 0 ]
+
+    _assert_all_completed plan-single
+}
+
+# ---------------------------------------------------------------------------
+# 2. Linear-3 (A → B → C)
+# ---------------------------------------------------------------------------
+
+@test "linear-3: all three nodes complete in sequence, exit 0" {
+    _write_acked plan-linear 1 "$FIXTURES_DIR/linear-3.json"
+
+    run run_dt plan-linear
+    [ "$status" -eq 0 ]
+
+    _assert_all_completed plan-linear
+}
+
+# ---------------------------------------------------------------------------
+# 3. Fan-out (root → leaf-a, leaf-b, leaf-c in parallel)
+# ---------------------------------------------------------------------------
+
+@test "fan-out: root then three parallel leaves all complete, exit 0" {
+    _write_acked plan-fanout 1 "$FIXTURES_DIR/fan-out.json"
+
+    run run_dt plan-fanout
+    [ "$status" -eq 0 ]
+
+    _assert_all_completed plan-fanout
+}
+
+# ---------------------------------------------------------------------------
+# 4. Fan-in (root-a, root-b, root-c → merger)
+# ---------------------------------------------------------------------------
+
+@test "fan-in: three parallel roots then merger all complete, exit 0" {
+    _write_acked plan-fanin 1 "$FIXTURES_DIR/fan-in.json"
+
+    run run_dt plan-fanin
+    [ "$status" -eq 0 ]
+
+    _assert_all_completed plan-fanin
+}
+
+# ---------------------------------------------------------------------------
+# 5. Diamond (root → branch-a, branch-b → terminal)
+# ---------------------------------------------------------------------------
+
+@test "diamond: all four nodes complete through two parallel branches, exit 0" {
+    _write_acked plan-diamond 1 "$FIXTURES_DIR/diamond.json"
+
+    run run_dt plan-diamond
+    [ "$status" -eq 0 ]
+
+    _assert_all_completed plan-diamond
+}
+
+# ---------------------------------------------------------------------------
+# 6. Failed node: downstream stays pending, exit 1
+# ---------------------------------------------------------------------------
+
+@test "failed node: downstream stays pending, dispatcher exits 1" {
+    _write_acked plan-fail 1 "$FIXTURES_DIR/linear-3.json"
+
+    # All claude invocations fail (is_error:true → status:failed)
+    export MOCK_CLAUDE_MODE=error
+    run run_dt plan-fail
+    unset MOCK_CLAUDE_MODE
+    [ "$status" -eq 1 ]
+
+    # node-a failed; node-b and node-c must not have been dispatched
+    run python3 - "$NPS_TASKLISTS_HOME/plan-fail/task-list-state.json" <<'PYEOF'
+import json, sys
+s = json.load(open(sys.argv[1]))
+ns = s['node_states']
+assert ns['node-a']['status'] == 'failed',   f"node-a: {ns['node-a']['status']}"
+assert ns['node-b']['status'] == 'pending',  f"node-b: {ns['node-b']['status']}"
+assert ns['node-c']['status'] == 'pending',  f"node-c: {ns['node-c']['status']}"
+print('ok')
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 7. Concurrent flock reject: second invocation exits 1
+# ---------------------------------------------------------------------------
+
+@test "concurrent flock: second dispatch-tasklist exits 1 while first holds lock" {
+    _write_acked plan-lock 1 "$FIXTURES_DIR/single-task.json"
+
+    local plan_dir="$NPS_TASKLISTS_HOME/plan-lock"
+    local lock_file="$plan_dir/.dispatcher.lock"
+    local lock_ready="$KIT_TMPDIR/lock-ready"
+
+    # Acquire the dispatcher lock in a background Python process
+    python3 - "$lock_file" "$lock_ready" <<'PYEOF' &
+import fcntl, sys, time, os
+os.makedirs(os.path.dirname(os.path.abspath(sys.argv[1])), exist_ok=True)
+lf = open(sys.argv[1], 'w')
+fcntl.flock(lf, fcntl.LOCK_EX)
+open(sys.argv[2], 'w').close()   # signal: lock held
+time.sleep(30)
+PYEOF
+    local lock_pid=$!
+
+    # Wait up to 5s for lock to be held
+    local i=0
+    while [[ ! -f "$lock_ready" ]] && (( i < 50 )); do
+        sleep 0.1
+        (( i += 1 ))
+    done
+
+    run run_dt plan-lock
+    local dt_status="$status"
+
+    kill "$lock_pid" 2>/dev/null || true
+    wait "$lock_pid" 2>/dev/null || true
+
+    [ "$dt_status" -eq 1 ]
+    echo "$output" | grep -qi "another dispatcher\|already running"
+}
+
+# ---------------------------------------------------------------------------
+# 8. --version auto-select: highest acked vN.json
+# ---------------------------------------------------------------------------
+
+@test "--version auto-select: highest acked version is dispatched" {
+    local tl_dir="$NPS_TASKLISTS_HOME/plan-autosel"
+    mkdir -p "$tl_dir"
+
+    # v1 stays as-is (version_id=1); v3 gets version_id=3
+    cp "$FIXTURES_DIR/single-task.json" "$tl_dir/v1.json"
+    python3 - "$FIXTURES_DIR/single-task.json" "$tl_dir/v3.json" 3 <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+d['version_id'] = int(sys.argv[3])
+with open(sys.argv[2], 'w') as f:
+    json.dump(d, f, indent=2)
+PYEOF
+
+    # No --version flag → auto-selects v3 (highest)
+    run run_dt plan-autosel
+    [ "$status" -eq 0 ]
+
+    # State active_version must equal the version_id baked into v3.json
+    run python3 - "$tl_dir/task-list-state.json" <<'PYEOF'
+import json, sys
+s = json.load(open(sys.argv[1]))
+assert s['active_version'] == 3, f"expected 3, got {s['active_version']}"
+print('ok')
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 9. --version N explicit override
+# ---------------------------------------------------------------------------
+
+@test "--version N: explicit flag dispatches specified version, not the latest" {
+    local tl_dir="$NPS_TASKLISTS_HOME/plan-explicit"
+    mkdir -p "$tl_dir"
+
+    # v1 (version_id=1) and v2 (version_id=2) both acked
+    cp "$FIXTURES_DIR/single-task.json" "$tl_dir/v1.json"
+    python3 - "$FIXTURES_DIR/single-task.json" "$tl_dir/v2.json" 2 <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+d['version_id'] = int(sys.argv[3])
+with open(sys.argv[2], 'w') as f:
+    json.dump(d, f, indent=2)
+PYEOF
+
+    # Explicitly request v1 (not the latest v2)
+    run run_dt plan-explicit --version 1
+    [ "$status" -eq 0 ]
+
+    # State active_version=1, not 2
+    run python3 - "$tl_dir/task-list-state.json" <<'PYEOF'
+import json, sys
+s = json.load(open(sys.argv[1]))
+assert s['active_version'] == 1, f"expected 1, got {s['active_version']}"
+print('ok')
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 10. Schema-invalid task-list: exit 2, no workers spawned
+# ---------------------------------------------------------------------------
+
+@test "schema-invalid task-list: parse failure exits 2, no intent files written" {
+    # Structurally broken: missing dag key — Python parse step throws KeyError
+    local tl_dir="$NPS_TASKLISTS_HOME/plan-invalid"
+    mkdir -p "$tl_dir"
+    printf '{"_ncp":1,"type":"task_list","schema_version":1,"version_id":1}\n' \
+        > "$tl_dir/v1.json"
+
+    run run_dt plan-invalid
+    [ "$status" -eq 2 ]
+
+    # No intents written to any worker inbox
+    local total=0
+    for worker in coder-01 coder-02 coder-03; do
+        local n
+        n=$(find "$KIT_AGENTS/$worker/inbox" -maxdepth 1 -name '*.intent.json' 2>/dev/null | wc -l)
+        total=$(( total + n ))
+    done
+    [ "$total" -eq 0 ]
+}
