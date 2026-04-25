@@ -57,7 +57,12 @@ def _emit(inp: dict) -> dict:
 
     title = fm.get("title", "execute-plan")
     action = _derive_action(title)
-    version_id = (prior_version + 1) if isinstance(prior_version, int) else 1
+    if isinstance(prior_version, dict):
+        version_id = prior_version.get('version_id', 0) + 1
+    elif isinstance(prior_version, int):
+        version_id = prior_version + 1
+    else:
+        version_id = 1
 
     return {
         "_ncp": 1,
@@ -67,7 +72,9 @@ def _emit(inp: dict) -> dict:
         "version_id": version_id,
         "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "created_by": CREATED_BY,
-        "prior_version": prior_version if isinstance(prior_version, int) else None,
+        "prior_version": (prior_version if isinstance(prior_version, int)
+                          else prior_version.get('version_id') if isinstance(prior_version, dict)
+                          else None),
         "pushback_reason": str(pushback) if pushback is not None else None,
         "dag": {
             "nodes": [
