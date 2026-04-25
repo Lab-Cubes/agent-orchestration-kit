@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "timestamp": "2026-04-24T12:47:12Z",
-  "plan_id": "plan-cloverthe.ai-20260424-123456",
+  "plan_id": "plan-example.com-20260424-123456",
   "prior_version": 1,
   "pushback_source": "node-3",
   "pushback_reason": "scope_insufficient",
@@ -9,7 +9,7 @@
   "decomposer_output_version": 2,
   "osi_ack_at": "2026-04-24T12:47:45Z",
   "osi_ack_verdict": "approve",
-  "osi_ack_by": "urn:nps:agent:cloverthe.ai:overseer-01",
+  "osi_ack_by": "urn:nps:agent:example.com:overseer-01",
   "duration_s": 33,
   "escalation_level": "task"
 }

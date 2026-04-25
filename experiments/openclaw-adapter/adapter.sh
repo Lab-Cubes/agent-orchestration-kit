@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 cloverthe.ai
+# Copyright 2026 Lab-Cubes
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ import uuid
 import subprocess
 from datetime import datetime, timezone
 
-SENDER_NID = "urn:nps:agent:cloverthe.ai:openclaw-adapter"
+SENDER_NID = "urn:nps:agent:example.com:openclaw-adapter"
 
 event_log = sys.argv[1]
 task_packet_str = os.environ["TASK_PACKET"]

@@ -89,7 +89,7 @@ Intentionally minimal — types only + test utilities. No production business lo
 
 ### Worker identity (NPS-3 NIP)
 
-NID format: `urn:nps:agent:{issuer_domain}:{agent_id}` — e.g. `urn:nps:agent:cloverthe.ai:coder-01`.
+NID format: `urn:nps:agent:{issuer_domain}:{agent_id}` — e.g. `urn:nps:agent:example.com:coder-01`.
 
 Worker instances live under `kits/agents/agents/` as starter configs; the runtime copies these to `$NPS_STATE_HOME/agents/` on setup. Each worker has a `CLAUDE.md` bootstrapped from `templates/AGENT-CLAUDE.md` and a `templates/personas/{type}.md` overlay.
 

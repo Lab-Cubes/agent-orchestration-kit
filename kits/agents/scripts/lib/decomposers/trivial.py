@@ -9,13 +9,15 @@ Adopters override decomposer_cmd in config.json with a sophisticated impl.
 """
 
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
 
 
-CREATED_BY = "urn:nps:agent:cloverthe.ai:decomposer-trivial"
-DEFAULT_AGENT = "urn:nps:agent:cloverthe.ai:coder-01"
+_ISSUER_DOMAIN = os.environ.get('ISSUER_DOMAIN', 'example.com')
+CREATED_BY = f"urn:nps:agent:{_ISSUER_DOMAIN}:decomposer-trivial"
+DEFAULT_AGENT = f"urn:nps:agent:{_ISSUER_DOMAIN}:coder-01"
 
 
 def _parse_frontmatter(plan_text: str) -> dict[str, str]:
@@ -92,11 +94,11 @@ def _self_test() -> None:
     fixture = {
         "plan": (
             "---\n"
-            "plan_id: plan-cloverthe.ai-20260425-120000\n"
+            "plan_id: plan-example.com-20260425-120000\n"
             "title: Refactor the login handler\n"
             "status: pending\n"
             "created_at: 2026-04-25T12:00:00Z\n"
-            "created_by: urn:nps:agent:cloverthe.ai:opus-overseer\n"
+            "created_by: urn:nps:agent:example.com:opus-overseer\n"
             "---\n\n"
             "Strategic intent body here."
         ),
@@ -107,7 +109,7 @@ def _self_test() -> None:
     }
     out = _emit(fixture)
 
-    assert out["plan_id"] == "plan-cloverthe.ai-20260425-120000", "plan_id mismatch"
+    assert out["plan_id"] == "plan-example.com-20260425-120000", "plan_id mismatch"
     assert out["version_id"] == 1, "version_id should be 1 on first emission"
     assert out["prior_version"] is None, "prior_version should be null"
     assert out["pushback_reason"] is None, "pushback_reason should be null"

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cloverthe.ai/schemas/orch-kit/v1/escalation-event.schema.json",
+  "$id": "https://github.com/Lab-Cubes/agent-orchestration-kit/raw/main/kits/agents/src/schemas/escalation-event.schema.json",
   "title": "EscalationEvent",
   "description": "Append-only escalation log entry (JSONL). Mirrors EscalationEvent in nop-types.ts.",
   "type": "object",
