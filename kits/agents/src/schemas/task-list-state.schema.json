@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cloverthe.ai/schemas/orch-kit/v1/task-list-state.schema.json",
+  "$id": "https://github.com/Lab-Cubes/agent-orchestration-kit/raw/main/kits/agents/src/schemas/task-list-state.schema.json",
   "title": "TaskListState",
   "description": "Graph-level execution state for one active plan version. Mirrors TaskListState + NodeState in nop-types.ts.",
   "type": "object",

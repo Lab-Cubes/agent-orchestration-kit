@@ -81,7 +81,7 @@ _write_pending() {
   "plan_id": "$PLAN_ID",
   "version_id": $version,
   "created_at": "2026-04-24T12:45:00Z",
-  "created_by": "urn:nps:agent:cloverthe.ai:decomposer-clover",
+  "created_by": "urn:nps:agent:example.com:decomposer-01",
   "prior_version": $prior_version,
   "pushback_reason": null,
   "dag": {
@@ -89,7 +89,7 @@ _write_pending() {
       {
         "id": "node-1",
         "action": "do-something",
-        "agent": "urn:nps:agent:cloverthe.ai:coder-01",
+        "agent": "urn:nps:agent:example.com:coder-01",
         "input_from": [],
         "input_mapping": {},
         "scope": ["src/"],
@@ -249,7 +249,7 @@ PYEOF
 @test "approve --as <nid>: escalation event captures the NID" {
     _write_pending 1
 
-    local nid="urn:nps:agent:cloverthe.ai:opus-overseer"
+    local nid="urn:nps:agent:example.com:opus-overseer"
 
     run run_ack --as "$nid" "$PLAN_ID" 1
 
@@ -332,7 +332,7 @@ PYEOF
 @test "reject --as <nid>: audit captures the NID" {
     _write_pending 1
 
-    local nid="urn:nps:agent:cloverthe.ai:opus-overseer"
+    local nid="urn:nps:agent:example.com:opus-overseer"
 
     run run_ack --reject --as "$nid" "$PLAN_ID" 1
 

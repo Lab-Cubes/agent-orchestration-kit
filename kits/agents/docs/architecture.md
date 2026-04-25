@@ -27,7 +27,7 @@ The kit targets a human-in-loop operational model: an Overseer ("OSer") approves
 
 ```
 ┌─────────────────┐
-│   Plan          │  Teddy (human) + OSer — strategic intent, scope, success criteria
+│   Plan          │  Human operator + OSer — strategic intent, scope, success criteria
 │                 │  Artifact: plans/{plan-id}/plan.md
 └────────┬────────┘
          ↓ OSer-ack
@@ -56,7 +56,7 @@ Each layer has one responsibility. Boundaries are filesystem artifacts, making t
 
 | Layer | Owner | Input | Output | LLM? |
 |---|---|---|---|---|
-| Plan | Teddy + OSer | Human intent | `plans/{plan-id}/plan.md` | No |
+| Plan | Human operator + OSer | Human intent | `plans/{plan-id}/plan.md` | No |
 | Decompose | OSer + Decomposer | Plan artifact | `task-lists/{plan-id}/pending/v{N}.json` | Yes (Decomposer) |
 | Dispatch | Dispatcher | Acked task-list | Worker intents + `task-list-state.json` + `escalation.jsonl` | No |
 | Execute | Workers | Intent | Result file + git commits on worktree branch | Yes (worker runtime) |
@@ -112,9 +112,9 @@ YAML frontmatter + markdown body. Human-editable.
 ---
 plan_id: plan-{issuer}-{YYYYMMDD}-{HHMMSS}
 created_at: 2026-04-24T12:34:56Z
-created_by: urn:nps:agent:cloverthe.ai:opus-overseer
+created_by: urn:nps:agent:example.com:opus-overseer
 osi_ack_at: 2026-04-24T12:40:01Z     # set on OSer ack; absent = pending
-osi_ack_by: urn:nps:agent:cloverthe.ai:teddy    # or OSer's NID when automated
+osi_ack_by: urn:nps:agent:example.com:overseer-01    # or OSer's NID when automated
 title: Short plan title
 status: pending | acked | executing | completed | cancelled
 ---
@@ -125,7 +125,7 @@ Strategic intent in free-form markdown. Scope, success criteria, constraints,
 context references. Human-authored.
 ```
 
-**Plan authoring is out of kit scope.** The kit ingests plans; authoring tools (markdown editor, Clover's interface, adopter-specific workflow) are adopter's choice.
+**Plan authoring is out of kit scope.** The kit ingests plans; authoring tools (markdown editor or adopter-specific workflow) are adopter's choice.
 
 ### 4.2 Task-list JSON (`task-lists/{plan-id}/{pending/,}v{N}.json`)
 
@@ -139,7 +139,7 @@ Aligned with NOP TaskFrame (NPS-5 §3.1). Kit-specific additions flagged.
   "plan_id": "plan-...",
   "version_id": 1,
   "created_at": "2026-04-24T12:45:00Z",
-  "created_by": "urn:nps:agent:cloverthe.ai:decomposer-clover",
+  "created_by": "urn:nps:agent:example.com:decomposer-01",
   "prior_version": null,
   "pushback_reason": null,
   "dag": {
@@ -147,7 +147,7 @@ Aligned with NOP TaskFrame (NPS-5 §3.1). Kit-specific additions flagged.
       {
         "id": "node-1",
         "action": "research-login-flow",
-        "agent": "urn:nps:agent:cloverthe.ai:researcher-01",
+        "agent": "urn:nps:agent:example.com:researcher-01",
         "input_from": [],
         "input_mapping": {},
         "scope": ["src/auth/**", "docs/auth.md"],
@@ -163,7 +163,7 @@ Aligned with NOP TaskFrame (NPS-5 §3.1). Kit-specific additions flagged.
       {
         "id": "node-2",
         "action": "refactor-login-handler",
-        "agent": "urn:nps:agent:cloverthe.ai:coder-01",
+        "agent": "urn:nps:agent:example.com:coder-01",
         "input_from": ["node-1"],
         "input_mapping": { "research_doc": "node-1.files_touched[0]" },
         "scope": ["src/auth/login.ts", "src/auth/__tests__/**"],
@@ -423,7 +423,7 @@ Merge-hold (§6.3) keys on the current `active_version`'s node states. Because t
 - Multiple workers fail in one decomposition
 - Dependency deadlock
 
-**OSer → Teddy:**
+**OSer → Human operator:**
 - Scope expansion beyond acked plan
 - Cost > 2× plan estimate
 - N=3 pushback loop on same plan

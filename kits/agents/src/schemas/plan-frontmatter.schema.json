@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cloverthe.ai/schemas/orch-kit/v1/plan-frontmatter.schema.json",
+  "$id": "https://github.com/Lab-Cubes/agent-orchestration-kit/raw/main/kits/agents/src/schemas/plan-frontmatter.schema.json",
   "title": "PlanFrontmatter",
   "description": "Required and optional fields from the YAML frontmatter of plans/{plan-id}/plan.md. Validated as a JSON object extracted from the frontmatter dict.",
   "type": "object",

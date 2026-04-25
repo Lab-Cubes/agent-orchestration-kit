@@ -65,7 +65,7 @@ assert e['event'] == 'lifecycle.done', f'event mismatch: {e[\"event\"]}'
 assert re.match(r'^[0-9a-f-]{36}$', e['stream_id']), f'stream_id not a UUID: {e[\"stream_id\"]}'
 assert e['task_id'] == 'parent-aaaa-bbbb', f'task_id mismatch: {e[\"task_id\"]}'
 assert e['subtask_id'] == 'sub-0000-1111', f'subtask_id mismatch: {e[\"subtask_id\"]}'
-assert e['sender_nid'] == 'urn:nps:agent:cloverthe.ai:openclaw-adapter', f'sender_nid mismatch'
+assert e['sender_nid'] == 'urn:nps:agent:example.com:openclaw-adapter', f'sender_nid mismatch'
 assert 'timestamp' in e and e['timestamp'].endswith('Z'), f'timestamp missing or bad format'
 assert isinstance(e['seq'], int), f'seq not int'
 print('envelope OK')
@@ -134,7 +134,7 @@ assert e['event'] == 'lifecycle.timed_out', f'event mismatch: {e[\"event\"]}'
 assert re.match(r'^[0-9a-f-]{36}$', e['stream_id']), 'stream_id not a UUID'
 assert e['task_id'] == 'parent-aaaa-bbbb', f'task_id mismatch'
 assert e['subtask_id'] == 'sub-0000-1111', f'subtask_id mismatch'
-assert e['sender_nid'] == 'urn:nps:agent:cloverthe.ai:openclaw-adapter', 'sender_nid mismatch'
+assert e['sender_nid'] == 'urn:nps:agent:example.com:openclaw-adapter', 'sender_nid mismatch'
 assert 'timestamp' in e and e['timestamp'].endswith('Z'), 'timestamp bad'
 print('envelope OK')
 "

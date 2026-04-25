@@ -21,7 +21,7 @@
     "nps",
     "claude-code"
   ],
-  "author": "cloverthe.ai",
+  "author": "Lab-Cubes",
   "engines": {
     "node": ">=22"
   },

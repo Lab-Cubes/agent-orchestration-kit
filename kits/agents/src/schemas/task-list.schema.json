@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cloverthe.ai/schemas/orch-kit/v1/task-list.schema.json",
+  "$id": "https://github.com/Lab-Cubes/agent-orchestration-kit/raw/main/kits/agents/src/schemas/task-list.schema.json",
   "title": "TaskListMessage",
   "description": "Versioned task-list emitted by the Decomposer (NPS-5 §3.1). Mirrors TaskListMessage in nop-types.ts.",
   "type": "object",

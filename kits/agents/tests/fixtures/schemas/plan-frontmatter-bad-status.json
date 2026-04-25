@@ -1,7 +1,7 @@
 {
-  "plan_id": "plan-cloverthe.ai-20260424-123456",
+  "plan_id": "plan-example.com-20260424-123456",
   "created_at": "2026-04-24T12:34:56Z",
-  "created_by": "urn:nps:agent:cloverthe.ai:opus-overseer",
+  "created_by": "urn:nps:agent:example.com:opus-overseer",
   "title": "Test Plan",
   "status": "in_progress"
 }
