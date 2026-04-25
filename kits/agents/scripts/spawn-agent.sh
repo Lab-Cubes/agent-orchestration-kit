@@ -82,6 +82,7 @@ DEFAULT_RUNTIME="claude"
 NPT_EXCHANGE_RATES_JSON='{"unknown":1.0}'
 DEFAULT_DECOMPOSER_CMD="python3 scripts/lib/decomposers/trivial.py"
 DEFAULT_DECOMPOSER_TIMEOUT_MS=60000
+MERGE_HOLD_ENFORCE=true
 
 if [[ -f "$CONFIG_FILE" ]]; then
     if ! python3 "$NPS_DIR/scripts/lib/validate_config.py" "$CONFIG_FILE" >&2; then
@@ -111,6 +112,7 @@ _fallback = dict((('unknown', 1.0),))
 print(f"NPT_EXCHANGE_RATES_JSON={json.dumps(_rates or _fallback)}")
 print(f"DEFAULT_DECOMPOSER_CMD={d.get('decomposer_cmd', 'python3 scripts/lib/decomposers/trivial.py')}")
 print(f"DEFAULT_DECOMPOSER_TIMEOUT_MS={d.get('decomposer_timeout_ms', 60000)}")
+print(f"MERGE_HOLD_ENFORCE={'true' if d.get('merge_hold_enforce', True) else 'false'}")
 PYEOF
 )
 fi
@@ -1302,10 +1304,12 @@ cmd_merge() {
     local task_id="$1"; shift
     local message=""
     local do_push=true
+    local force_merge=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --no-push) do_push=false; shift ;;
-            *) message="$1"; shift ;;
+            --no-push)     do_push=false; shift ;;
+            --force-merge) force_merge=true; shift ;;
+            *)             message="$1"; shift ;;
         esac
     done
 
@@ -1336,6 +1340,87 @@ PYEOF
     fi
 
     if [[ -z "$branch" || -z "$original_scope" ]]; then err "Invalid branch metadata"; exit 1; fi
+
+    # ---- Merge-hold gate ----
+    # Check plan_id from the task's result file; solo-intent tasks (no plan_id) bypass.
+    local task_plan_id=""
+    local result_file="$NPS_AGENTS_HOME/$agent_id/done/${task_id}.result.json"
+    if [[ -f "$result_file" ]]; then
+        task_plan_id=$(python3 - "$result_file" <<'PYEOF' 2>/dev/null
+import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get('payload', {}).get('plan_id') or '')
+except Exception:
+    print('')
+PYEOF
+        ) || true
+    fi
+
+    if [[ -n "$task_plan_id" ]]; then
+        local state_file="$NPS_TASKLISTS_HOME/$task_plan_id/task-list-state.json"
+        if [[ ! -f "$state_file" ]]; then
+            warn "merge-hold: no task-list-state.json for plan $task_plan_id — bypassing hold check"
+        else
+            local hold_check
+            hold_check=$(python3 - "$state_file" <<'PYEOF' 2>/dev/null
+import json, sys
+s = json.load(open(sys.argv[1]))
+terminal = {'completed', 'failed', 'cancelled', 'timeout', 'superseded'}
+if not s.get('merge_hold', True):
+    print('OK')
+    raise SystemExit(0)
+non_terminal = [(nid, ns['status']) for nid, ns in s['node_states'].items()
+                if ns['status'] not in terminal]
+if non_terminal:
+    for nid, st in non_terminal:
+        print(f'BLOCKED\t{nid}\t{st}')
+else:
+    print('OK')
+PYEOF
+            ) || true
+
+            if [[ "$hold_check" != "OK" ]]; then
+                if [[ "$MERGE_HOLD_ENFORCE" != "true" ]]; then
+                    if [[ "$force_merge" != "true" ]]; then
+                        err "merge_hold_enforce=false but --force-merge not passed; add --force-merge to override"
+                        err "Non-terminal nodes in plan $task_plan_id:"
+                        while IFS=$'\t' read -r _ nid st; do
+                            [[ "$nid" == "BLOCKED" ]] && continue
+                            err "  $nid: $st"
+                        done <<< "$hold_check"
+                        exit 1
+                    fi
+                    warn "merge_hold_enforce=false; manual ack required (--force-merge passed for task $task_id)"
+                    # Escalation event: manual_merge_override
+                    python3 - "$NPS_TASKLISTS_HOME/$task_plan_id/escalation.jsonl" \
+                        "$task_plan_id" "$task_id" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+from datetime import datetime, timezone
+log_p, plan_id, task_id = sys.argv[1:]
+now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+event = {
+    "schema_version": 1, "timestamp": now, "plan_id": plan_id,
+    "prior_version": None, "pushback_source": task_id,
+    "pushback_reason": None, "dispatcher_acted": "manual_merge_override",
+    "decomposer_output_version": None, "osi_ack_at": None,
+    "osi_ack_verdict": None, "osi_ack_by": None,
+    "duration_s": None, "escalation_level": "task",
+}
+os.makedirs(os.path.dirname(os.path.abspath(log_p)), exist_ok=True)
+with open(log_p, 'a') as f:
+    f.write(json.dumps(event) + '\n')
+PYEOF
+                else
+                    err "merge-hold: task-list for plan $task_plan_id is not fully green"
+                    err "Non-terminal nodes (must be completed|failed|cancelled|timeout|superseded):"
+                    while IFS=$'\t' read -r tag nid st; do
+                        [[ "$tag" == "BLOCKED" ]] && err "  $nid: $st"
+                    done <<< "$hold_check"
+                    exit 1
+                fi
+            fi
+        fi
+    fi
 
     git -C "$original_scope" config user.name > /dev/null 2>&1 && \
         git -C "$original_scope" config user.email > /dev/null 2>&1 || {
@@ -1878,18 +1963,18 @@ PYEOF
     fi
 
     # ---- Helper: append escalation event ----
+    # Args: dispatcher_acted_or_null  pushback_source_or_null  escalation_level  [prior_version_or_null]
     _dt_append_event() {
-        # Args: dispatcher_acted_or_null  pushback_source_or_null  escalation_level
-        python3 - "$escalation_log" "$plan_id" "$version_id" "$1" "$2" "$3" <<'PYEOF'
+        python3 - "$escalation_log" "$plan_id" "$version_id" "$1" "$2" "$3" "${4:-null}" <<'PYEOF'
 import json, os, sys
 from datetime import datetime, timezone
-log_p, plan_id, ver_str, disp_acted, pb_src, level = sys.argv[1:]
+log_p, plan_id, ver_str, disp_acted, pb_src, level, prior_ver = sys.argv[1:]
 now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 event = {
     "schema_version": 1,
     "timestamp": now,
     "plan_id": plan_id,
-    "prior_version": None,
+    "prior_version": None if prior_ver == 'null' else int(prior_ver),
     "pushback_source": None if pb_src == 'null' else pb_src,
     "pushback_reason": None,
     "dispatcher_acted": None if disp_acted == 'null' else disp_acted,
@@ -1900,7 +1985,7 @@ event = {
     "duration_s": None,
     "escalation_level": level,
 }
-os.makedirs(os.path.dirname(log_p) or '.', exist_ok=True)
+os.makedirs(os.path.dirname(os.path.abspath(log_p)), exist_ok=True)
 with open(log_p, 'a') as f:
     f.write(json.dumps(event) + '\n')
 PYEOF
@@ -1932,6 +2017,244 @@ with open(tmp, 'w') as f:
 os.replace(tmp, sf)
 PYEOF
     }
+
+    # ---- Helper: rename a branch for supersede (terminal + pushback-blocked nodes) ----
+    # Args: node_id  agent_id  task_id_or_null  prev_version  event_action  new_status_or_empty
+    #   new_status_or_empty = "" means leave status unchanged (terminal nodes)
+    _dt_supersede_rename_branch() {
+        local _srb_node="$1" _srb_agent="$2" _srb_tid="$3" _srb_prev="$4"
+        local _srb_event="$5" _srb_status="$6"
+        if [[ "$_srb_tid" == "null" ]]; then
+            [[ -n "$_srb_status" ]] && _dt_update_node "$_srb_node" "$_srb_status" "null" "null"
+            _dt_append_event "$_srb_event" "null" "task" "$_srb_prev"
+            return
+        fi
+        local _srb_bf="$NPS_AGENTS_HOME/$_srb_agent/done/${_srb_tid}.branch.json"
+        local _srb_branch="" _srb_wt="" _srb_bm
+        if [[ -f "$_srb_bf" ]]; then
+            _srb_bm=$(python3 - "$_srb_bf" <<'PYEOF' 2>/dev/null
+import json, sys
+d = json.load(open(sys.argv[1]))
+print('\t'.join([d.get('branch',''), d.get('worktree','')]))
+PYEOF
+            ) || true
+            [[ -n "$_srb_bm" ]] && IFS=$'\t' read -r _srb_branch _srb_wt <<< "$_srb_bm"
+        fi
+        if [[ -n "$_srb_branch" && -d "$_srb_wt" ]]; then
+            local _srb_new="superseded/${plan_id}/v${_srb_prev}/${_srb_branch#agent/}"
+            git -C "$_srb_wt" branch -m "$_srb_branch" "$_srb_new" 2>/dev/null || true
+        fi
+        [[ -n "$_srb_status" ]] && _dt_update_node "$_srb_node" "$_srb_status" "$_srb_tid" "null"
+        _dt_append_event "$_srb_event" "$_srb_tid" "task" "$_srb_prev"
+    }
+
+    # ---- Helper: supersede a running node ----
+    # Args: node_id  agent_id  task_id_or_null  prev_version
+    # Sets: updates state + appends escalation event; complex-HEAD → blocked (gates drain)
+    _dt_supersede_running() {
+        local _sr_node="$1" _sr_agent="$2" _sr_tid="$3" _sr_prev="$4"
+        if [[ "$_sr_tid" == "null" ]]; then
+            warn "cmd_dispatch_tasklist: supersede: running node $_sr_node has null task_id — complex state"
+            _dt_update_node "$_sr_node" "blocked" "null" "null"
+            _dt_append_event "supersede_complex_state" "null" "task" "$_sr_prev"
+            return
+        fi
+        local _sr_bf="$NPS_AGENTS_HOME/$_sr_agent/done/${_sr_tid}.branch.json"
+        if [[ ! -f "$_sr_bf" ]]; then
+            warn "cmd_dispatch_tasklist: supersede: no branch.json for $_sr_tid — complex state"
+            _dt_update_node "$_sr_node" "blocked" "$_sr_tid" "null"
+            _dt_append_event "supersede_complex_state" "$_sr_tid" "task" "$_sr_prev"
+            return
+        fi
+        local _sr_branch="" _sr_wt="" _sr_scope="" _sr_bm
+        _sr_bm=$(python3 - "$_sr_bf" <<'PYEOF' 2>/dev/null
+import json, sys
+d = json.load(open(sys.argv[1]))
+print('\t'.join([d.get('branch',''), d.get('worktree',''), d.get('original_scope','')]))
+PYEOF
+        ) || true
+        [[ -n "$_sr_bm" ]] && IFS=$'\t' read -r _sr_branch _sr_wt _sr_scope <<< "$_sr_bm"
+        if [[ -z "$_sr_branch" || -z "$_sr_wt" ]]; then
+            warn "cmd_dispatch_tasklist: supersede: invalid branch metadata for $_sr_tid — complex state"
+            _dt_update_node "$_sr_node" "blocked" "$_sr_tid" "null"
+            _dt_append_event "supersede_complex_state" "$_sr_tid" "task" "$_sr_prev"
+            return
+        fi
+        # Best-effort SIGINT to running worker (process may have already exited)
+        local _sr_pid
+        _sr_pid=$(ps aux 2>/dev/null | grep -F "$_sr_tid" | grep -v grep | awk '{print $2}' | head -1 || true)
+        if [[ -n "$_sr_pid" ]]; then
+            kill -INT "$_sr_pid" 2>/dev/null || true
+            sleep 1
+        fi
+        # HEAD state check
+        local _sr_head
+        _sr_head=$(git -C "$_sr_wt" symbolic-ref --quiet HEAD 2>/dev/null || echo "")
+        if [[ -z "$_sr_head" || "$_sr_head" != "refs/heads/${_sr_branch}" ]]; then
+            warn "cmd_dispatch_tasklist: supersede: abnormal HEAD in worktree for $_sr_tid (head=${_sr_head:-<detached>}) — complex state"
+            _dt_update_node "$_sr_node" "blocked" "$_sr_tid" "null"
+            _dt_append_event "supersede_complex_state" "$_sr_tid" "task" "$_sr_prev"
+            return
+        fi
+        # Normal HEAD: Dispatcher-side commit + branch rename
+        local _sr_email _sr_name
+        _sr_email=$(git config user.email 2>/dev/null || echo "noreply@example.com")
+        _sr_name=$(git config user.name 2>/dev/null || echo "Dispatcher")
+        git -C "$_sr_wt" add -A 2>/dev/null || true
+        if ! git -C "$_sr_wt" \
+                -c "user.email=${_sr_email}" \
+                -c "user.name=${_sr_name}" \
+                commit -m "supersede: partial work at v${_sr_prev}" \
+                --allow-empty --no-verify 2>/dev/null; then
+            warn "cmd_dispatch_tasklist: supersede: Dispatcher-side commit failed for $_sr_tid — complex state"
+            _dt_update_node "$_sr_node" "blocked" "$_sr_tid" "null"
+            _dt_append_event "supersede_complex_state" "$_sr_tid" "task" "$_sr_prev"
+            return
+        fi
+        local _sr_new="superseded/${plan_id}/v${_sr_prev}/${_sr_branch#agent/}"
+        if ! git -C "$_sr_wt" branch -m "$_sr_branch" "$_sr_new" 2>/dev/null; then
+            warn "cmd_dispatch_tasklist: supersede: branch rename failed for $_sr_tid — complex state"
+            _dt_update_node "$_sr_node" "blocked" "$_sr_tid" "null"
+            _dt_append_event "supersede_complex_state" "$_sr_tid" "task" "$_sr_prev"
+            return
+        fi
+        _dt_update_node "$_sr_node" "superseded" "$_sr_tid" "null"
+        _dt_append_event "supersede_applied" "$_sr_tid" "task" "$_sr_prev"
+        log "cmd_dispatch_tasklist: supersede: node $_sr_node → superseded (branch: $_sr_new)"
+    }
+
+    # ---- Helper: run supersede pass (v_N → v_{N+1}) ----
+    # Args: prev_version (N; v_{N+1} is already $version_id)
+    _dt_run_supersede_pass() {
+        local _sp_prev="$1"
+        local _sp_prev_tl="$plan_dir/v${_sp_prev}.json"
+        if [[ ! -f "$_sp_prev_tl" ]]; then
+            err "cmd_dispatch_tasklist: supersede: v${_sp_prev}.json not found — cannot route v${_sp_prev} nodes"
+            kill "$_lock_pid" 2>/dev/null || true
+            exit 1
+        fi
+        log "cmd_dispatch_tasklist: supersede pass v${_sp_prev} → v${version_id}"
+        # Build node→agent map from v_N task-list
+        local _sp_node_agents
+        _sp_node_agents=$(python3 - "$_sp_prev_tl" <<'PYEOF'
+import json, sys
+for n in json.load(open(sys.argv[1]))['dag']['nodes']:
+    print(f"{n['id']}\t{n['agent'].split(':')[-1]}")
+PYEOF
+        ) || { err "cmd_dispatch_tasklist: supersede: failed to parse v${_sp_prev}.json"; kill "$_lock_pid" 2>/dev/null || true; exit 1; }
+        # Read current node states
+        local _sp_node_states
+        _sp_node_states=$(python3 - "$state_file" <<'PYEOF'
+import json, sys
+for nid, ns in json.load(open(sys.argv[1]))['node_states'].items():
+    print('\t'.join([nid, ns['status'],
+                     ns.get('task_id') or 'null',
+                     ns.get('result_path') or 'null']))
+PYEOF
+        )
+        local _sp_blocked=false
+        local _sp_blocked_list=()
+        while IFS=$'\t' read -r _sp_nid _sp_st _sp_tid _sp_rp; do
+            [[ -z "$_sp_nid" ]] && continue
+            local _sp_agent
+            _sp_agent=$(awk -F'\t' -v nid="$_sp_nid" '$1==nid{print $2; exit}' <<< "$_sp_node_agents")
+            if [[ -z "$_sp_agent" ]]; then
+                warn "cmd_dispatch_tasklist: supersede: no agent for node $_sp_nid in v${_sp_prev}"
+                continue
+            fi
+            case "$_sp_st" in
+                running)
+                    _dt_supersede_running "$_sp_nid" "$_sp_agent" "$_sp_tid" "$_sp_prev"
+                    # Re-read post-transition status
+                    local _sp_post
+                    _sp_post=$(python3 - "$state_file" "$_sp_nid" <<'PYEOF' 2>/dev/null
+import json, sys
+print(json.load(open(sys.argv[1]))['node_states'].get(sys.argv[2], {}).get('status', 'unknown'))
+PYEOF
+                    )
+                    if [[ "$_sp_post" == "blocked" ]]; then
+                        _sp_blocked=true
+                        _sp_blocked_list+=("$_sp_nid")
+                    fi
+                    ;;
+                blocked)
+                    local _sp_has_pb=false
+                    if [[ "$_sp_rp" != "null" && -f "$_sp_rp" ]]; then
+                        _sp_has_pb=$(python3 - "$_sp_rp" <<'PYEOF' 2>/dev/null
+import json, sys
+try:
+    print('true' if json.load(open(sys.argv[1])).get('payload', {}).get('pushback_reason') else 'false')
+except Exception:
+    print('false')
+PYEOF
+                        )
+                    fi
+                    if [[ "$_sp_has_pb" == "true" ]]; then
+                        _dt_supersede_rename_branch "$_sp_nid" "$_sp_agent" "$_sp_tid" "$_sp_prev" "pushback_superseded" "superseded"
+                    else
+                        warn "cmd_dispatch_tasklist: supersede: blocked node $_sp_nid (no pushback) gates drain"
+                        _dt_append_event "supersede_complex_state" "$_sp_tid" "task" "$_sp_prev"
+                        _sp_blocked=true
+                        _sp_blocked_list+=("$_sp_nid")
+                    fi
+                    ;;
+                completed|failed|cancelled|timeout|superseded)
+                    _dt_supersede_rename_branch "$_sp_nid" "$_sp_agent" "$_sp_tid" "$_sp_prev" "supersede_archived" ""
+                    ;;
+                pending)
+                    # Never dispatched: no branch to rename; archive directly
+                    _dt_update_node "$_sp_nid" "superseded" "null" "null"
+                    _dt_append_event "supersede_archived" "null" "task" "$_sp_prev"
+                    ;;
+            esac
+        done <<< "$_sp_node_states"
+        # Drain gate
+        if $_sp_blocked; then
+            err "KIT-SUPERSEDE-INCOMPLETE: v${_sp_prev} nodes blocked — OSer triage required:"
+            for _bn in "${_sp_blocked_list[@]}"; do err "  $_bn"; done
+            err "Resolve blocked nodes, then re-run: spawn-agent.sh dispatch-tasklist $plan_id"
+            kill "$_lock_pid" 2>/dev/null || true
+            exit 1
+        fi
+        # All v_N nodes terminal — flip active_version to v_{N+1} and re-init node_states
+        python3 - "$state_file" "$state_tmp" "$task_list_file" "$version_id" "$_sp_prev" <<'PYEOF'
+import json, os, sys
+from datetime import datetime, timezone
+sf, tmp, tl_file, new_ver, prev_ver = sys.argv[1:]
+new_ver, prev_ver = int(new_ver), int(prev_ver)
+now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+s = json.load(open(sf))
+tl = json.load(open(tl_file))
+svs = s.get('superseded_versions', [])
+if prev_ver not in svs:
+    svs.append(prev_ver)
+s['active_version'] = new_ver
+s['superseded_versions'] = svs
+s['node_states'] = {
+    n['id']: {"status": "pending", "task_id": None,
+               "started_at": None, "completed_at": None,
+               "result_path": None, "retries": 0}
+    for n in tl['dag']['nodes']
+}
+s['updated_at'] = now
+with open(tmp, 'w') as f:
+    json.dump(s, f, indent=2)
+    f.write('\n')
+os.replace(tmp, sf)
+PYEOF
+        log "cmd_dispatch_tasklist: supersede complete — active_version → v${version_id}"
+    }
+
+    # ---- Supersede check: version upgrade detected ----
+    local _cur_active_ver
+    _cur_active_ver=$(python3 - "$state_file" <<'PYEOF' 2>/dev/null
+import json, sys
+print(json.load(open(sys.argv[1])).get('active_version', 0))
+PYEOF
+    )
+    if [[ "$_cur_active_ver" -lt "$version_id" ]]; then
+        _dt_run_supersede_pass "$_cur_active_ver"
+    fi
 
     # ---- Graph walk loop ----
     # Wave-based: each iteration dispatches all currently-runnable nodes in
