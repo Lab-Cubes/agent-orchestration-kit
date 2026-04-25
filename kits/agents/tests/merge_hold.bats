@@ -254,3 +254,19 @@ PYEOF
     # merge_hold=false in state → gate passes without error
     echo "$output" | grep -qiv "not fully green\|merge-hold"
 }
+
+# ---------------------------------------------------------------------------
+# 10. Archived (superseded) branch: actionable message instead of generic error
+# ---------------------------------------------------------------------------
+
+@test "archived branch: shows superseded path and cherry-pick guidance" {
+    # Rename agent/ branch → superseded/ as the supersede lifecycle does
+    local archived="superseded/plan-arc/v1/coder-01/${TASK_ID}"
+    git -C "$REPO" branch -m "$BRANCH" "$archived"
+
+    run run_merge "$TASK_ID" --no-push
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"$archived"* ]]
+    [[ "$output" == *"supersede lifecycle"* ]]
+    [[ "$output" == *"cherry-pick"* ]]
+}

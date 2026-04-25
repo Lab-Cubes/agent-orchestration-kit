@@ -1344,6 +1344,41 @@ PYEOF
 
     if [[ -z "$branch" || -z "$original_scope" ]]; then err "Invalid branch metadata"; exit 1; fi
 
+    # Archive-branch detection: if the expected branch no longer exists, check for
+    # superseded/{plan-id}/v{N}/{agent-id}/{task-id} and emit actionable guidance.
+    if ! git -C "$original_scope" rev-parse --verify "refs/heads/$branch" >/dev/null 2>&1; then
+        local archived_branch
+        archived_branch=$(git -C "$original_scope" for-each-ref \
+            "refs/heads/superseded/" --format='%(refname:short)' 2>/dev/null \
+            | grep "/${agent_id}/${task_id}\$" | head -1)
+        if [[ -n "$archived_branch" ]]; then
+            local arc_plan arc_ver arc_status="unknown" arc_active="unknown"
+            arc_plan=$(printf '%s' "$archived_branch" | cut -d/ -f2)
+            arc_ver=$(printf '%s' "$archived_branch" | cut -d/ -f3)
+            local arc_state_f="$NPS_TASKLISTS_HOME/$arc_plan/task-list-state.json"
+            if [[ -f "$arc_state_f" ]]; then
+                local arc_meta
+                arc_meta=$(python3 - "$arc_state_f" "$task_id" <<'PYEOF' 2>/dev/null
+import json, sys
+s = json.load(open(sys.argv[1]))
+tid = sys.argv[2]
+status = next((ns['status'] for ns in s['node_states'].values()
+               if ns.get('task_id') == tid), 'unknown')
+print('\t'.join([status, str(s.get('active_version', 'unknown'))]))
+PYEOF
+                ) || true
+                [[ -n "$arc_meta" ]] && IFS=$'\t' read -r arc_status arc_active <<< "$arc_meta"
+            fi
+            err "Task $task_id is archived under supersede lifecycle."
+            err "Branch: $archived_branch"
+            err "State: node status $arc_status at active_version $arc_active (supersede from $arc_ver)"
+            err "If you want to land this work despite the supersede, cherry-pick:"
+            err "    git cherry-pick <commit-hash>..HEAD"
+            err "from the superseded branch into your target."
+            exit 1
+        fi
+    fi
+
     # ---- Merge-hold gate ----
     # Check plan_id from the task's result file; solo-intent tasks (no plan_id) bypass.
     local task_plan_id=""
@@ -2546,6 +2581,7 @@ case "${1:-help}" in
         echo "  dispatch          <agent-id> \"<intent>\" Launch worker on a task"
         echo "  dispatch-tasklist <plan-id> [--version] Dispatch full task-list DAG"
         echo "  merge             <task-id> [\"msg\"]     Squash-merge worktree branch"
+        echo "                    Archived (superseded) branches emit cherry-pick guidance."
         echo "  setup             <agent-id> <type>     Create worker dir + CLAUDE.md"
         echo "  status            <agent-id>            Show mailbox + latest result"
         echo "  supersede-gc      [--list] [--older-than=N] [--dry-run] [--plan-id=ID]"
