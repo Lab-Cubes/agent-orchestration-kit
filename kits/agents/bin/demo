@@ -40,37 +40,48 @@ done
 # ---------------------------------------------------------------------------
 if [[ "$PHASED_PREVIEW" == "true" ]]; then
     hi ""
-    hi "╭────────────────────────────────────────────────────────────╮"
-    hi "│  NPS Phased-Dispatch Preview  (Plan → Decompose → pending)  │"
-    hi "╰────────────────────────────────────────────────────────────╯"
+    hi "╭──────────────────────────────────────────────────────────────────╮"
+    hi "│  NPS Phased-Dispatch Preview  (Plan → Decompose → Ack → Dispatch) │"
+    hi "╰──────────────────────────────────────────────────────────────────╯"
     hi ""
-    say "Generating sample plan → running Decomposer → writing pending task-list..."
+    say "Plan → Decompose → OSer ack → ready for dispatch-tasklist..."
     say ""
 
     PREVIEW_TMPDIR="$(mktemp -d)"
     PLAN_ID="plan-demo-$(date -u +%Y%m%d-%H%M%S)"
+    PREVIEW_PLANS="$PREVIEW_TMPDIR/plans"
+    PREVIEW_TASKLISTS="$PREVIEW_TMPDIR/task-lists"
+    mkdir -p "$PREVIEW_PLANS/$PLAN_ID"
     PREVIEW_INPUT="$PREVIEW_TMPDIR/decompose-input.json"
 
-    python3 - "$PLAN_ID" "$PREVIEW_INPUT" <<'PYEOF'
+    python3 - "$PLAN_ID" "$PREVIEW_PLANS/$PLAN_ID/plan.md" "$PREVIEW_INPUT" <<'PYEOF'
 import json, sys
-plan_id, out_path = sys.argv[1], sys.argv[2]
+plan_id, plan_file, input_file = sys.argv[1], sys.argv[2], sys.argv[3]
+plan_text = (
+    "---\nplan_id: " + plan_id +
+    "\ntitle: Demo phased-dispatch plan\nstatus: pending\ncreated_at: 2026-01-01T00:00:00Z\n---\n\nDemo plan body."
+)
+open(plan_file, 'w').write(plan_text)
 json.dump({
-    "plan": "---\nplan_id: " + plan_id + "\ntitle: Demo phased-dispatch plan\nstatus: pending\ncreated_at: 2026-01-01T00:00:00Z\n---\n\nDemo plan body.",
+    "plan": plan_text,
     "context": {"files": [], "knowledge": [], "branch": "main"},
     "prior_version": None, "prior_state": None, "pushback": None,
-}, open(out_path, 'w'))
+}, open(input_file, 'w'))
 PYEOF
 
     DECOMPOSE_OUT="$PREVIEW_TMPDIR/decompose-stdout.txt"
-    NPS_TASKLISTS_HOME="$PREVIEW_TMPDIR/task-lists" \
+    NPS_TASKLISTS_HOME="$PREVIEW_TASKLISTS" \
+    NPS_PLANS_HOME="$PREVIEW_PLANS" \
         "$NPS_DIR/scripts/spawn-agent.sh" decompose < "$PREVIEW_INPUT" \
         > "$DECOMPOSE_OUT" 2>&1 || {
         warn "Decompose failed — check config.json and scripts/lib/decomposers/trivial.py."
         rm -rf "$PREVIEW_TMPDIR"
         exit 1
     }
-    PENDING_PATH=$(tail -1 "$DECOMPOSE_OUT")
+    PENDING_PATH=$(grep -oE '[^ ]+/pending/v[0-9]+\.json' "$DECOMPOSE_OUT" | tail -1)
+    [[ -z "$PENDING_PATH" ]] && PENDING_PATH=$(tail -1 "$DECOMPOSE_OUT")
 
+    say "Step 1 — Decompose"
     say "  Plan ID:      $PLAN_ID"
     say "  Pending file: $PENDING_PATH"
     echo ""
@@ -84,7 +95,25 @@ print(f"  action:      {d['dag']['nodes'][0]['action']}")
 print(f"  created_by:  {d['created_by']}")
 PYEOF
     echo ""
-    say "OSer gate next: ./scripts/spawn-agent.sh ack $PLAN_ID 1"
+
+    say "Step 2 — OSer ack (approve v1)"
+    NPS_TASKLISTS_HOME="$PREVIEW_TASKLISTS" \
+    NPS_PLANS_HOME="$PREVIEW_PLANS" \
+        "$NPS_DIR/scripts/spawn-agent.sh" ack "$PLAN_ID" 1 2>&1 | grep -v '^\[nps\]' | head -5 || true
+    ACKED="$PREVIEW_TASKLISTS/$PLAN_ID/v1.json"
+    if [[ -f "$ACKED" ]]; then
+        say "  Acked: $ACKED"
+    else
+        warn "Ack failed — v1.json not found."
+        rm -rf "$PREVIEW_TMPDIR"
+        exit 1
+    fi
+    echo ""
+
+    say "Step 3 — Next: dispatch-tasklist (requires Claude CLI + workers)"
+    say "  ./scripts/spawn-agent.sh dispatch-tasklist $PLAN_ID"
+    say "Step 4 — After all nodes green: merge each task"
+    say "  ./scripts/spawn-agent.sh merge <task-id>"
     echo ""
 
     rm -rf "$PREVIEW_TMPDIR"

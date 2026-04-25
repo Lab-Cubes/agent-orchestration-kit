@@ -1881,7 +1881,8 @@ for n in d['dag']['nodes']:
     agent_id = n['agent'].split(':')[-1]
     scope_csv = ','.join(n.get('scope') or [])
     timeout_s = str(int(n.get('timeout_ms', 600000) // 1000))
-    print(f"NODE={n['id']}{SEP}{agent_id}{SEP}{n['action']}{SEP}{scope_csv}{SEP}{n['budget_npt']}{SEP}{timeout_s}")
+    max_retries = str(n.get('retry_policy', {}).get('max_retries', 0))
+    print(f"NODE={n['id']}{SEP}{agent_id}{SEP}{n['action']}{SEP}{scope_csv}{SEP}{n['budget_npt']}{SEP}{timeout_s}{SEP}{max_retries}")
 PYEOF
     ) || { err "cmd_dispatch_tasklist: failed to parse task-list JSON"; rm -f "$node_data_file"; kill "$_lock_pid" 2>/dev/null || true; exit 2; }
 
@@ -1896,7 +1897,7 @@ PYEOF
             PLAN_ID_TL)  ;;   # already have plan_id from arg
             NODE)
                 # IFS=$'\037' (non-whitespace) so empty scope_csv fields are preserved
-                IFS=$'\037' read -r nid agent_id action scope_csv budget timeout_s \
+                IFS=$'\037' read -r nid agent_id action scope_csv budget timeout_s max_retries \
                     <<< "${line#NODE=}"
                 node_ids+=("$nid")
                 _agents+=("$agent_id")
@@ -1905,8 +1906,9 @@ PYEOF
                 _budgets+=("$budget")
                 _timeouts+=("$timeout_s")
                 # Also write tab-delimited to node_data_file for awk-based lookups
-                printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-                    "$nid" "$agent_id" "$action" "$scope_csv" "$budget" "$timeout_s" \
+                # Fields: 1=node_id 2=agent_id 3=action 4=scope_csv 5=budget 6=timeout_s 7=max_retries
+                printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+                    "$nid" "$agent_id" "$action" "$scope_csv" "$budget" "$timeout_s" "${max_retries:-0}" \
                     >> "$node_data_file"
                 ;;
         esac
@@ -1966,22 +1968,26 @@ PYEOF
     fi
 
     # ---- Helper: append escalation event ----
-    # Args: dispatcher_acted_or_null  pushback_source_or_null  escalation_level  [prior_version_or_null]
+    # Args: dispatcher_acted_or_null  pushback_source_or_null  escalation_level
+    #       [prior_version_or_null]  [pushback_reason_or_null]  [decomposer_output_version_or_null]
     _dt_append_event() {
-        python3 - "$escalation_log" "$plan_id" "$version_id" "$1" "$2" "$3" "${4:-null}" <<'PYEOF'
+        python3 - "$escalation_log" "$plan_id" "$version_id" "$1" "$2" "$3" \
+            "${4:-null}" "${5:-null}" "${6:-null}" <<'PYEOF'
 import json, os, sys
 from datetime import datetime, timezone
-log_p, plan_id, ver_str, disp_acted, pb_src, level, prior_ver = sys.argv[1:]
+log_p, plan_id, ver_str, disp_acted, pb_src, level, prior_ver, pb_reason, decomp_ver = sys.argv[1:]
 now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+decomp_out = (int(decomp_ver) if decomp_ver not in ('null', '') and decomp_ver.isdigit()
+              else (int(ver_str) if ver_str.isdigit() else None))
 event = {
     "schema_version": 1,
     "timestamp": now,
     "plan_id": plan_id,
     "prior_version": None if prior_ver == 'null' else int(prior_ver),
     "pushback_source": None if pb_src == 'null' else pb_src,
-    "pushback_reason": None,
+    "pushback_reason": None if pb_reason == 'null' else pb_reason,
     "dispatcher_acted": None if disp_acted == 'null' else disp_acted,
-    "decomposer_output_version": int(ver_str) if ver_str.isdigit() else None,
+    "decomposer_output_version": decomp_out,
     "osi_ack_at": None,
     "osi_ack_verdict": None,
     "osi_ack_by": None,
@@ -2264,6 +2270,7 @@ PYEOF
     # parallel, waits for completion, then checks terminal state and repeats.
     # Runnable: status=pending AND all input_from nodes are completed.
     local any_failed=false
+    local _pushback_break=false
     local max_waves=$(( ${#node_ids[@]} + 1 ))
     local wave=0
 
@@ -2305,8 +2312,8 @@ PYEOF
         [[ "$all_terminal" == "true" ]] && break
 
         if [[ -z "$runnable_str" ]]; then
-            # No runnable nodes and not yet terminal → failed deps block progress
             err "cmd_dispatch_tasklist: no runnable nodes — blocked by failed dependency"
+            _dt_append_event "escalated_to_oser" "null" "task"
             any_failed=true
             break
         fi
@@ -2361,31 +2368,94 @@ PYEOF
             fi
 
             # Determine node outcome from result payload
-            local node_status="failed"
+            local node_status="failed" node_pushback_reason=""
             if [[ "$result_file" != "null" ]]; then
-                node_status=$(python3 - "$result_file" <<'PYEOF'
+                local _raw_outcome
+                _raw_outcome=$(python3 - "$result_file" <<'PYEOF'
 import json, sys
 try:
     p = json.load(open(sys.argv[1])).get('payload', {})
-    print('completed' if p.get('status') == 'completed' else 'failed')
-except Exception:
-    print('failed')
+    s = p.get('status', 'failed')
+    pb = p.get('pushback_reason') or ''
+    if s == 'completed': print('completed')
+    elif s == 'blocked' and pb: print('pushback'); print(pb)
+    else: print('failed')
+except Exception: print('failed')
 PYEOF
                 )
+                node_status=$(printf '%s' "$_raw_outcome" | sed -n '1p')
+                node_pushback_reason=$(printf '%s' "$_raw_outcome" | sed -n '2p')
             fi
 
-            _dt_update_node "$node_id" "$node_status" "${task_id:-null}" "$result_file"
-
-            if [[ "$node_status" == "failed" ]]; then
+            if [[ "$node_status" == "pushback" ]]; then
+                _dt_update_node "$node_id" "blocked" "${task_id:-null}" "$result_file"
+                log "cmd_dispatch_tasklist: node $node_id BLOCKED (pushback: $node_pushback_reason)"
+                local _pb_plan="$NPS_PLANS_HOME/$plan_id/plan.md"
+                local _pb_input _pb_decomp_exit=0
+                local _pb_new_ver=$(( version_id + 1 ))
+                if [[ -f "$_pb_plan" ]]; then
+                    _pb_input=$(mktemp)
+                    python3 - "$_pb_plan" "$task_list_file" "$state_file" "$node_pushback_reason" \
+                        <<'PYEOF' > "$_pb_input"
+import json, sys
+plan_file, tl_file, sf, pb = sys.argv[1:]
+print(json.dumps({"plan": open(plan_file).read(),
+    "context": {"files": [], "knowledge": [], "branch": "main"},
+    "prior_version": json.load(open(tl_file)),
+    "prior_state": json.load(open(sf)), "pushback": pb}))
+PYEOF
+                    "$0" decompose < "$_pb_input" > /dev/null 2>&1 || _pb_decomp_exit=$?
+                    rm -f "$_pb_input"
+                else
+                    warn "cmd_dispatch_tasklist: pushback: plan.md not found ($plan_id)"
+                    _pb_decomp_exit=1
+                fi
+                local _pb_acted="invoked_decomposer" _pb_ver="$_pb_new_ver"
+                [[ $_pb_decomp_exit -ne 0 ]] && { _pb_acted="decomposer_failed"; _pb_ver="null"; }
+                _dt_append_event "$_pb_acted" "${task_id:-null}" "task" \
+                    "$version_id" "$node_pushback_reason" "$_pb_ver"
                 any_failed=true
-                _dt_append_event "escalated_to_oser" "${task_id:-null}" "task"
-                log "cmd_dispatch_tasklist: node $node_id FAILED"
+                _pushback_break=true
+                break
+
+            elif [[ "$node_status" == "failed" ]]; then
+                local _node_retries _node_max_r
+                _node_retries=$(python3 - "$state_file" "$node_id" 2>/dev/null <<'PYEOF'
+import json, sys; print(json.load(open(sys.argv[1]))['node_states'][sys.argv[2]].get('retries', 0))
+PYEOF
+                )
+                _node_max_r=$(_dt_node_field "$node_id" 7)
+                _node_retries="${_node_retries:-0}"; _node_max_r="${_node_max_r:-0}"
+                if [[ "$_node_retries" -lt "${_node_max_r:-0}" ]]; then
+                    python3 - "$state_file" "$state_tmp" "$node_id" "$(( _node_retries + 1 ))" <<'PYEOF'
+import json, os, sys
+from datetime import datetime, timezone
+sf, tmp, nid, nr = sys.argv[1:]
+now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+d = json.load(open(sf))
+ns = d['node_states'][nid]
+ns.update({'status': 'pending', 'retries': int(nr), 'started_at': None, 'completed_at': None})
+d['updated_at'] = now
+open(tmp, 'w').write(json.dumps(d, indent=2) + '\n')
+os.replace(tmp, sf)
+PYEOF
+                    _dt_append_event "retried" "${task_id:-null}" "task"
+                    log "cmd_dispatch_tasklist: node $node_id retrying (attempt $(( _node_retries + 1 )) of $_node_max_r)"
+                else
+                    _dt_update_node "$node_id" "failed" "${task_id:-null}" "$result_file"
+                    _dt_append_event "escalated_to_oser" "${task_id:-null}" "task"
+                    any_failed=true
+                    log "cmd_dispatch_tasklist: node $node_id FAILED"
+                fi
+
             else
+                _dt_update_node "$node_id" "$node_status" "${task_id:-null}" "$result_file"
                 log "cmd_dispatch_tasklist: node $node_id completed"
             fi
         done
 
         rm -rf "$wave_tmp_dir"
+        [[ "$_pushback_break" == "true" ]] && break
     done
 
     # ---- Final version-level escalation event ----
