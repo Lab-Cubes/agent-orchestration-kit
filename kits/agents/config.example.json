@@ -41,5 +41,8 @@
   "$comment_decomposer_timeout_ms": "Max wall-clock milliseconds for a Decomposer invocation. Exceeded invocations receive SIGTERM; after 2s grace period, SIGKILL. Logged as a decomposer_failed escalation event with reason=timeout.",
 
   "merge_hold_enforce": true,
-  "$comment_merge_hold_enforce": "When true (default), cmd_merge refuses to squash-merge a task branch until the full task-list-state is green (all nodes terminal). Set to false only for emergency recovery from 4b bugs — every override then requires an explicit --force-merge flag and is captured as a manual_merge_override escalation event."
+  "$comment_merge_hold_enforce": "When true (default), cmd_merge refuses to squash-merge a task branch until the full task-list-state is green (all nodes terminal). Set to false only for emergency recovery from 4b bugs — every override then requires an explicit --force-merge flag and is captured as a manual_merge_override escalation event.",
+
+  "persona_set": "personas",
+  "$comment_persona_set": "Template directory under kits/agents/templates/ used to bootstrap worker personas. 'personas' (default) = tightened narrow-executor set for use with a sophisticated Decomposer. 'personas-legacy' = broad-intent-compatible originals for demo or trivial-fallback Decomposer use."
 }

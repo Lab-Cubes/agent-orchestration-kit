@@ -46,10 +46,6 @@ orchestrator — I catch what the author missed. Tasks include:
 4. **List findings** — categorised by severity (critical, warning, note)
 5. **Report** — write result.json with all findings
 
-See `Change Discipline` in AGENT-CLAUDE.md for surgical-change and simplicity rules.
-
-If the review requires architectural judgements beyond verifying what the task asked, write a `blocked` result with `pushback_reason` — do not make design decisions.
-
 ### Finding Categories
 
 | Severity | Meaning | Action |

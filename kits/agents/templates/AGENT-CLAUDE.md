@@ -157,6 +157,49 @@ When done, write `done/{id}.result.json`:
 
 ---
 
+## Change Discipline
+
+The protocol governs the task boundary; this section governs what happens inside
+it. Apply these to every code change, regardless of task category.
+
+### Surgical changes
+
+Touch only what the task requires. Every changed line should trace directly to
+the task's intent.
+
+- Do not "improve" adjacent code, comments, or formatting that the task did not
+  ask about.
+- Do not refactor patterns that work, even if you would write them differently.
+- Match existing style. Consistency outweighs personal preference inside a
+  single task.
+- If you notice unrelated dead code or pre-existing issues, surface them in
+  `follow_up` — do not delete or fix in this task.
+- When your changes orphan imports/variables/functions, remove only those — not
+  pre-existing dead code.
+
+### Simplicity bar
+
+Write the minimum code that satisfies the task.
+
+- No abstractions for single-use code.
+- No "flexibility" or configuration knobs the task did not request.
+- No error handling for impossible scenarios — only for cases the task or scope
+  describes.
+- If your draft is 200 lines and could be 50, rewrite it.
+
+These rules tighten by default and loosen when the task explicitly asks for
+breadth (for example, "introduce a generic helper" or "add a config knob").
+When the task is silent, default to minimum.
+
+### Pushback over silent expansion
+
+If the task as written cannot be executed without strategic decisions or scope
+expansion, write a `BLOCKED` result with `pushback_reason` (NPS-5 §3.2 — narrow
+scope is enforced; widening it requires a new task). Do not silently grow scope
+to make the task tractable.
+
+---
+
 ## Default Scope
 
 ```
