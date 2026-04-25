@@ -40,6 +40,7 @@
     "nop_overhead_usd": {"type": "number", "minimum": 0},
     "decomposer_cmd": {"type": "string", "minLength": 1},
     "decomposer_timeout_ms": {"type": "integer", "minimum": 1},
-    "merge_hold_enforce": {"type": "boolean"}
+    "merge_hold_enforce": {"type": "boolean"},
+    "persona_set": {"type": "string", "minLength": 1}
   }
 }

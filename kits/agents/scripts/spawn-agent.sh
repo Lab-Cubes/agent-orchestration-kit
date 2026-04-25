@@ -63,7 +63,7 @@ NPS_PLANS_HOME="${NPS_PLANS_HOME:-$NPS_STATE_HOME_DEFAULT/plans}"
 COST_LOG="$NPS_LOGS_HOME/dispatch-costs.csv"
 TEMPLATE="$NPS_DIR/templates/AGENT-CLAUDE.md"
 HOOKS_DIR="$NPS_DIR/hooks"
-PERSONAS_DIR="$NPS_DIR/templates/personas"
+PERSONA_SET="personas"
 
 # --- Config (from config.json if present, else defaults) ---
 # Defaults here; overridden below if config.json exists. Using env vars read
@@ -113,9 +113,12 @@ print(f"NPT_EXCHANGE_RATES_JSON={json.dumps(_rates or _fallback)}")
 print(f"DEFAULT_DECOMPOSER_CMD={d.get('decomposer_cmd', 'python3 scripts/lib/decomposers/trivial.py')}")
 print(f"DEFAULT_DECOMPOSER_TIMEOUT_MS={d.get('decomposer_timeout_ms', 60000)}")
 print(f"MERGE_HOLD_ENFORCE={'true' if d.get('merge_hold_enforce', True) else 'false'}")
+print(f"PERSONA_SET={d.get('persona_set', 'personas')}")
 PYEOF
 )
 fi
+
+PERSONAS_DIR="$NPS_DIR/templates/$PERSONA_SET"
 
 # --- Colours ---
 RED='\033[0;31m'

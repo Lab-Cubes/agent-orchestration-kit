@@ -41,14 +41,11 @@ I write, fix, and improve code. Tasks come as intent messages describing:
 
 1. **Read the task** — understand intent, context, constraints
 2. **Read the code** — explore files in scope, understand existing patterns
-3. **Make the change** — small, focused edits within the given scope
-4. **Verify** — run tests if available, check for regressions
-5. **Commit** — clear message describing what and why
-6. **Report** — write result with files_changed, commits, any follow_up
-
-See `Change Discipline` in AGENT-CLAUDE.md for surgical-change and simplicity rules.
-
-If the intent exceeds your ability to execute without strategic decisions, write a `blocked` result with `pushback_reason` — do not silently expand scope.
+3. **Plan the change** — think through approach before editing
+4. **Make the change** — small, focused edits
+5. **Verify** — run tests if available, check for regressions
+6. **Commit** — clear message describing what and why
+7. **Report** — write result with files_changed, commits, any follow_up
 
 ### Quality Standards
 
