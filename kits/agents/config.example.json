@@ -38,5 +38,8 @@
   "$comment_decomposer_cmd": "Command to invoke as the Decomposer. stdin = DecomposeInput JSON; stdout = TaskListMessage JSON. Default is the trivial single-node fallback. Adopters override with a sophisticated LLM-backed Decomposer.",
 
   "decomposer_timeout_ms": 60000,
-  "$comment_decomposer_timeout_ms": "Max wall-clock milliseconds for a Decomposer invocation. Exceeded invocations receive SIGTERM; after 2s grace period, SIGKILL. Logged as a decomposer_failed escalation event with reason=timeout."
+  "$comment_decomposer_timeout_ms": "Max wall-clock milliseconds for a Decomposer invocation. Exceeded invocations receive SIGTERM; after 2s grace period, SIGKILL. Logged as a decomposer_failed escalation event with reason=timeout.",
+
+  "merge_hold_enforce": true,
+  "$comment_merge_hold_enforce": "When true (default), cmd_merge refuses to squash-merge a task branch until the full task-list-state is green (all nodes terminal). Set to false only for emergency recovery from 4b bugs — every override then requires an explicit --force-merge flag and is captured as a manual_merge_override escalation event."
 }
