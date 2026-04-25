@@ -411,6 +411,8 @@ Merge-hold (§6.3) keys on the current `active_version`'s node states. Because t
 
 **Helper command for v2:** a `cmd_supersede_resolve` command to automate OSer triage (re-attach HEAD, transition blocked→superseded or blocked→running with state edits). Deferred — v1 uses manual state-file editing documented here.
 
+**Worktree cleanup:** superseded worktrees accumulate at `$NPS_WORKTREES_HOME`. Run `spawn-agent.sh supersede-gc --older-than=N` to bulk-remove by age; `--plan-id` scopes to a single plan. Each removal appends a `dispatcher_acted: "supersede_gc"` escalation event for audit.
+
 ### 6.5 Escalation triggers
 
 **Worker → Dispatcher:**
