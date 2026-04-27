@@ -358,19 +358,34 @@ Copy `config.example.json` to `config.json`. Edit before first use.
 | `issuer_domain`               | string   | `dev.localhost` | Domain fragment in NIDs. Use org domain for production.        |
 | `issuer_agent_id`             | string   | `operator`      | Agent ID of the orchestrator/dispatcher.                       |
 | `default_capabilities`        | string[] | `["nop:execute"]` | Capabilities granted to all workers by default.              |
-| `default_budget_npt`          | integer  | `20000`         | Per-task NPT cap when no category budget applies.              |
-| `category_budget_npt.code`    | integer  | `30000`         | NPT cap for `code` category tasks.                             |
-| `category_budget_npt.docs`    | integer  | `40000`         | NPT cap for `docs` category tasks.                             |
+| `default_budget_npt`          | integer  | `40000`         | Per-task NPT cap when no category budget applies.              |
+| `category_budget_npt.code`    | integer  | `40000`         | NPT cap for `code` category tasks.                             |
+| `category_budget_npt.docs`    | integer  | `60000`         | NPT cap for `docs` category tasks.                             |
 | `category_budget_npt.test`    | integer  | `30000`         | NPT cap for `test` category tasks.                             |
 | `category_budget_npt.research`| integer  | `60000`         | NPT cap for `research` category tasks.                         |
-| `category_budget_npt.refactor`| integer  | `40000`         | NPT cap for `refactor` category tasks.                         |
-| `category_budget_npt.ops`     | integer  | `30000`         | NPT cap for `ops` category tasks.                              |
+| `category_budget_npt.refactor`| integer  | `60000`         | NPT cap for `refactor` category tasks.                         |
+| `category_budget_npt.ops`     | integer  | `40000`         | NPT cap for `ops` category tasks.                              |
 | `default_model`               | string   | `sonnet`        | Model used when `constraints.model` is not set in intent.      |
+| `runtime`                     | string   | `claude`        | Agent runtime adapter (`claude` or `kiro`); override per-dispatch with `--runtime`. |
 | `default_time_limit_s`        | integer  | `900`           | Wall-clock seconds before timeout. Hard stop.                  |
 | `default_max_turns`           | integer  | `100`           | Safety net turn count for the agent runtime CLI.               |
+| `decomposer_cmd`              | string   | `python3 scripts/lib/decomposers/trivial.py` | Command invoked for Decompose; stdin is DecomposeInput JSON, stdout is TaskListMessage JSON. |
+| `decomposer_timeout_ms`       | integer  | `60000`         | Wall-clock milliseconds before the Decomposer is terminated.   |
+| `merge_hold_enforce`          | boolean  | `true`          | Require green task-list state before `cmd_merge`; `false` still requires explicit `--force-merge`. |
+| `persona_set`                 | string   | `personas`      | Template subdirectory under `kits/agents/templates/` used when bootstrapping worker personas. |
 | `default_shutdown_grace_s`    | integer  | `15`            | Seconds to wait for graceful exit after SIGINT (soft cap path). |
 | `default_soft_cap_ratio`      | number   | `0.90`          | Fraction of budget at which soft cap fires (0 < ratio ≤ 1).   |
 | `npt_exchange_rates`          | object   | see §8.1        | Per-family NPT multipliers. Keys are family names; `$`-prefixed keys are comments. |
+
+Category-specific budgets override `default_budget_npt` when the dispatcher has
+a matching `category_budget_npt.<category>` entry. Explicit `--budget` on the
+dispatch command overrides both config defaults.
+
+`persona_set: "personas"` is the tightened worker set. It expects narrow,
+well-decomposed task scopes. If you run the trivial decomposer (`scope: ["."]`)
+with tightened personas, workers may correctly return `BLOCKED` for broad
+intents; use `personas-legacy` for broad demo flows or configure a
+sophisticated decomposer.
 
 Env var overrides (set in `.env`):
 

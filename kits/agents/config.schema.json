@@ -10,15 +10,22 @@
     "default_budget_npt": {"type": "integer", "minimum": 1},
     "category_budget_npt": {
       "type": "object",
+      "patternProperties": {
+        "^\\$": {"type": "string"}
+      },
       "additionalProperties": {"type": "integer", "minimum": 1}
     },
     "default_model": {"type": "string"},
+    "runtime": {"type": "string", "enum": ["claude", "kiro"]},
     "default_time_limit_s": {"type": "integer", "minimum": 1},
     "default_max_turns": {"type": "integer", "minimum": 1},
     "default_shutdown_grace_s": {"type": "integer", "minimum": 1},
     "default_soft_cap_ratio": {"type": "number", "exclusiveMinimum": 0, "maximum": 1.0},
     "npt_exchange_rates": {
       "type": "object",
+      "patternProperties": {
+        "^\\$": {"type": "string"}
+      },
       "additionalProperties": {"type": "number", "minimum": 0}
     },
     "decomposer_cmd": {"type": "string", "minLength": 1},
