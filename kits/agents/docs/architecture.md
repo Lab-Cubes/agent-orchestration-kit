@@ -261,11 +261,14 @@ Change-class classification (`change_class`, `scope_patch | graph_restructure | 
 
 `NopIntentPayload` and `NopResultPayload` in [`src/nop-types.ts`](../src/nop-types.ts) gain a `plan_id` field. Additive, non-breaking. Optional in v1; required once Dispatcher 4a (#63) is the only intent-emitting caller — at which point every intent carries its plan_id by construction.
 
+`NopIntentPayload` also carries optional `success_criteria`, copied from the task-list node on task-list dispatch. This preserves the machine-checkable DoD from `TaskNode.success_criteria` without requiring workers to fetch the parent task-list.
+
 ```typescript
 interface NopIntentPayload {
   _nop: 1;
   id: string;              // task-{issuer}-{YYYYMMDD}-{HHMMSS}
   plan_id?: string;        // Optional in v1; required post-#63 (Dispatcher 4a)
+  success_criteria?: Record<string, unknown>; // DoD copied from TaskNode
   from: string;
   to?: string;
   // ... existing fields

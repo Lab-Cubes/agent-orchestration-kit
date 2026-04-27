@@ -53,6 +53,10 @@ Worker ID format: `{type}-{NN}` — e.g. `coder-01`, `researcher-01`.
     "priority": "urgent | normal | low",
     "category": "code | docs | test | research | refactor | ops",
     "mailbox": { "base": "./" },
+    "success_criteria": {
+      "tests": ["path/to/test-file"],
+      "commits": ">=1"
+    },
     "context": {
       "files": ["path/to/relevant/file"],
       "knowledge": ["key fact 1", "key fact 2"],
@@ -70,6 +74,8 @@ Worker ID format: `{type}-{NN}` — e.g. `coder-01`, `researcher-01`.
 File name: `{payload.id}.intent.json`
 
 All keys are snake_case. `_ncp` and `_nop` are protocol version markers — always `1`.
+`payload.success_criteria` is optional for solo intents and copied from the
+task-list node for `dispatch-tasklist` intents.
 
 ---
 

@@ -148,6 +148,8 @@ export interface NopIntentPayload {
   mailbox: Mailbox;
   context?: TaskContext;
   constraints?: TaskConstraints;
+  /** Machine-checkable DoD copied from TaskNode.success_criteria when task-list dispatched. */
+  success_criteria?: Record<string, unknown>;
 }
 
 export type TaskStatus = "completed" | "failed" | "timeout" | "blocked";

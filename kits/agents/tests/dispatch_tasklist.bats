@@ -106,18 +106,60 @@ PYEOF
     [ "$status" -eq 0 ]
 }
 
+_assert_task_intent_success_criteria() {
+    local plan_id="$1"
+    run python3 - "$NPS_TASKLISTS_HOME/$plan_id/task-list-state.json" "$KIT_AGENTS" <<'PYEOF'
+import json, os, sys
+state_file, agents_home = sys.argv[1:]
+state = json.load(open(state_file))
+task_ids = [
+    ns.get("task_id")
+    for ns in state["node_states"].values()
+    if ns.get("task_id")
+]
+assert task_ids, "expected at least one dispatched task_id"
+for task_id in task_ids:
+    found = False
+    for worker in os.listdir(agents_home):
+        for state_dir in ("inbox", "active", "done", "blocked"):
+            intent_file = os.path.join(agents_home, worker, state_dir, f"{task_id}.intent.json")
+            if not os.path.isfile(intent_file):
+                continue
+            found = True
+            intent = json.load(open(intent_file))
+            actual = intent.get("payload", {}).get("success_criteria")
+            assert actual == {"tests": ["unit.test.ts"], "commits": ">=1"}, actual
+    assert found, f"{task_id}: intent file not found"
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # 1. Single-task happy path
 # ---------------------------------------------------------------------------
 
 @test "single-task: node-a completes, state=completed, exit 0" {
-    _write_acked plan-single 1 "$FIXTURES_DIR/single-task.json"
+    local tl_dir="$NPS_TASKLISTS_HOME/plan-single"
+    mkdir -p "$tl_dir"
+    python3 - "$FIXTURES_DIR/single-task.json" "$tl_dir/v1.json" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+d["dag"]["nodes"][0]["success_criteria"] = {
+    "tests": ["unit.test.ts"],
+    "commits": ">=1",
+}
+with open(sys.argv[2], "w") as f:
+    json.dump(d, f, indent=2)
+    f.write("\n")
+PYEOF
 
     run run_dt plan-single
     [ "$status" -eq 0 ]
 
     _assert_all_completed plan-single
     _assert_task_result_plan_id plan-single
+    _assert_task_intent_success_criteria plan-single
 }
 
 # ---------------------------------------------------------------------------

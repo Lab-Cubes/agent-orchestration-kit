@@ -288,6 +288,7 @@ cmd_dispatch() {
     local target_branch=""
     local branch_name_override=""
     local plan_id=""
+    local success_criteria_file=""
 
     _budget_for_category() {
         if [[ -f "$CONFIG_FILE" ]]; then
@@ -319,6 +320,7 @@ PYEOF
             --branch-name)   branch_name_override="$2"; shift 2 ;;
             --target-branch) target_branch="$2"; shift 2 ;;
             --plan-id)       plan_id="$2"; shift 2 ;;
+            --success-criteria-file) success_criteria_file="$2"; shift 2 ;;
             *) err "Unknown option: $1"; exit 1 ;;
         esac
     done
@@ -412,12 +414,12 @@ PYEOF
     python3 - \
         "$intent_text" "$task_id" "$ISSUER_DOMAIN" "$ISSUER" "$agent_id" \
         "$created_at" "$priority" "$category" "$scope" "$model" \
-        "$time_limit" "$budget" "$context_json" "$plan_id" \
+        "$time_limit" "$budget" "$context_json" "$plan_id" "$success_criteria_file" \
         <<'PYEOF' > "$tmp_intent"
-import json, sys
+import json, os, sys
 (_, intent_text, task_id, issuer_domain, issuer, agent_id,
  created_at, priority, category, scope_str, model,
- time_limit, budget, context_json, plan_id) = sys.argv
+ time_limit, budget, context_json, plan_id, success_criteria_file) = sys.argv
 
 scope_list = [s for s in scope_str.split(',') if s] if scope_str else []
 
@@ -451,6 +453,9 @@ intent = {
 }
 if plan_id:
     intent['payload']['plan_id'] = plan_id
+if success_criteria_file and os.path.isfile(success_criteria_file):
+    with open(success_criteria_file) as f:
+        intent['payload']['success_criteria'] = json.load(f)
 print(json.dumps(intent, indent=2))
 PYEOF
 
@@ -2393,10 +2398,25 @@ PYEOF
             timeout_s=$(_dt_node_field "$node_id" 6)
 
             local dispatch_log="$wave_tmp_dir/$node_id.log"
+            local success_criteria_file="$wave_tmp_dir/$node_id.success_criteria.json"
+            python3 - "$task_list_file" "$node_id" "$success_criteria_file" <<'PYEOF'
+import json, sys
+tl_file, node_id, out_file = sys.argv[1:]
+tl = json.load(open(tl_file))
+for node in tl['dag']['nodes']:
+    if node['id'] == node_id:
+        with open(out_file, 'w') as f:
+            json.dump(node.get('success_criteria') or {}, f)
+            f.write('\n')
+        break
+else:
+    raise SystemExit(f"node not found: {node_id}")
+PYEOF
 
             local -a dispatch_args=("$agent_id" "$action" \
                 "--budget" "$budget" "--time-limit" "$timeout_s" \
-                "--plan-id" "$plan_id")
+                "--plan-id" "$plan_id" \
+                "--success-criteria-file" "$success_criteria_file")
             [[ -n "$scope_csv" ]] && dispatch_args+=("--scope" "$scope_csv")
 
             log "cmd_dispatch_tasklist: dispatching node $node_id → agent $agent_id"
