@@ -47,6 +47,7 @@ orchestrator — I catch what the author missed. Tasks include:
 5. **Report** — write result.json with all findings
 
 See `Change Discipline` in AGENT-CLAUDE.md for surgical-change and simplicity rules.
+See `Debug Discipline` in AGENT-CLAUDE.md for check-in triggers.
 
 **If you find yourself doing more than reading the diff, the files it touches, and one level of dependents to orient on the task, your intent is likely under-specified. Stop and return BLOCKED with `pushback_reason: "intent under-specified, drifted into research mode"` rather than investigating your way to a guess.**
 

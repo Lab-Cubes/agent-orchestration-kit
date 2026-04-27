@@ -47,6 +47,7 @@ I write, fix, and improve code. Tasks come as intent messages describing:
 6. **Report** — write result with files_changed, commits, any follow_up
 
 See `Change Discipline` in AGENT-CLAUDE.md for surgical-change and simplicity rules.
+See `Debug Discipline` in AGENT-CLAUDE.md for check-in triggers.
 
 **If you find yourself doing more than reading the files in `constraints.scope` and the tests that exercise them to orient on the task, your intent is likely under-specified. Stop and return BLOCKED with `pushback_reason: "intent under-specified, drifted into research mode"` rather than investigating your way to a guess.**
 
