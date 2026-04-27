@@ -344,6 +344,8 @@ Makes `bin/demo` runnable without external LLM integration. Adopters ship sophis
 
 **Compatibility caveat with tightened personas.** The trivial-fallback emits broad-scope intents (`scope = ["."]`, empty `success_criteria`). Tightened personas from issue 9 assume narrow Decomposer output — broad intents combined with tightened personas can starve workers (no strategic planning allowed, no narrow direction provided). Adopters running the trivial decomposer should keep the current untightened personas; tightened personas ship alongside a sophisticated Decomposer. See issue 9 DoD.
 
+**Anti-drift counterpart.** Tightened personas (issue 108) add a role-specific exploration baseline to each worker type: coders stop at the files in `constraints.scope` and their tests; critics stop at the diff, files it touches, and one level of dependents; researchers stop at the sources directly named in `context.files` and `context.knowledge`. Exceeding this baseline triggers a `BLOCKED` result with `pushback_reason: "intent under-specified, drifted into research mode"`. This is the symmetric counterpart to the trivial-decomposer caveat: the trivial decomposer produces intents that violate the baseline by construction, so running trivial-decomposer intents against anti-drift personas will produce BLOCKED results for under-specified tasks. Narrow Decomposer output is required for anti-drift personas to function as intended.
+
 ### 5.5 Statelessness
 
 Kit-side stateless: the kit holds no Decomposer state between invocations. Inputs fully determine output. Decomposer implementations may maintain internal state (e.g., prompt caching, LLM context) but the kit does not rely on it.
