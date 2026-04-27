@@ -134,7 +134,6 @@ def _self_test() -> None:
     # pushback path — trivial decomposer must refuse, not re-emit
     import io
     import contextlib
-    import subprocess
     fixture2 = dict(fixture, prior_version=1, pushback="scope_insufficient")
     stderr_buf = io.StringIO()
     pushback_exit = None
