@@ -6,6 +6,15 @@ Run with --self-test for an in-process smoke check.
 
 Not a production Decomposer. Makes bin/demo runnable without an LLM.
 Adopters override decomposer_cmd in config.json with a sophisticated impl.
+
+Supported frontmatter format (strict subset of YAML):
+  - delimiters: --- on their own lines
+  - body: key: value pairs, one per line
+  - keys: alphanumeric + underscore + dash, no whitespace
+  - values: plain strings; no comments, quotes, brackets, pipes,
+    or leading whitespace beyond one optional space after the colon
+
+Plans with richer frontmatter require a sophisticated decomposer.
 """
 
 import json
@@ -20,12 +29,15 @@ CREATED_BY = f"urn:nps:agent:{_ISSUER_DOMAIN}:decomposer-trivial"
 DEFAULT_AGENT = f"urn:nps:agent:{_ISSUER_DOMAIN}:coder-01"
 
 
+_FRONTMATTER_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
 def _parse_frontmatter(plan_text: str) -> dict[str, str]:
-    """Extract key: value pairs from YAML frontmatter (between --- delimiters)."""
+    """Extract strict key: value frontmatter pairs, failing loud on richer YAML."""
     lines = plan_text.splitlines()
     in_front = False
     fields: dict[str, str] = {}
-    for line in lines:
+    for line_no, line in enumerate(lines, start=1):
         stripped = line.strip()
         if stripped == "---":
             if not in_front:
@@ -33,9 +45,35 @@ def _parse_frontmatter(plan_text: str) -> dict[str, str]:
                 continue
             else:
                 break
-        if in_front and ":" in stripped:
-            key, _, val = stripped.partition(":")
-            fields[key.strip()] = val.strip()
+        if not in_front:
+            continue
+        if not stripped:
+            continue
+        if line.startswith((" ", "\t")):
+            raise ValueError(f"frontmatter line {line_no}: multi-line value not supported")
+        if stripped.startswith("#"):
+            raise ValueError(f"frontmatter line {line_no}: comments not supported")
+        if "#" in stripped:
+            raise ValueError(f"frontmatter line {line_no}: comments not supported")
+        if ":" not in stripped:
+            raise ValueError(f"frontmatter line {line_no}: expected key: value pair")
+
+        key, _, raw_val = line.partition(":")
+        key = key.strip()
+        if raw_val.startswith("\t") or raw_val.startswith("  "):
+            raise ValueError(f"frontmatter line {line_no}: multi-line value not supported")
+        val = raw_val[1:] if raw_val.startswith(" ") else raw_val
+        val = val.rstrip()
+        if not _FRONTMATTER_KEY_RE.fullmatch(key):
+            raise ValueError(f"frontmatter line {line_no}: invalid key")
+        if "'" in val or '"' in val:
+            raise ValueError(f"frontmatter line {line_no}: quoted value not supported")
+        if "[" in val or "]" in val:
+            raise ValueError(f"frontmatter line {line_no}: list value not supported")
+        if "|" in val or val == ">" or val.startswith("> "):
+            raise ValueError(f"frontmatter line {line_no}: block scalar not supported")
+
+        fields[key] = val
     return fields
 
 
@@ -130,6 +168,32 @@ def _self_test() -> None:
     assert out["_ncp"] == 1
     assert out["type"] == "task_list"
     assert out["schema_version"] == 1
+
+    # strict frontmatter subset — unsupported YAML must fail loud
+    negative_cases = [
+        ('title: "Plan: with colon"', "quoted value not supported"),
+        ("tags: [a, b, c]", "list value not supported"),
+        ("title: |", "block scalar not supported"),
+        ("  multi-line title", "multi-line value not supported"),
+        ("# comment", "comments not supported"),
+    ]
+    for frontmatter_line, expected_error in negative_cases:
+        bad_fixture = dict(fixture)
+        bad_fixture["plan"] = (
+            "---\n"
+            "plan_id: plan-example.com-20260425-120000\n"
+            f"{frontmatter_line}\n"
+            "---\n\n"
+            "Strategic intent body here."
+        )
+        try:
+            _emit(bad_fixture)
+        except ValueError as exc:
+            assert expected_error in str(exc), (
+                f"expected {expected_error!r} for {frontmatter_line!r}, got {exc!r}"
+            )
+        else:
+            raise AssertionError(f"expected ValueError for {frontmatter_line!r}")
 
     # pushback path — trivial decomposer must refuse, not re-emit
     import io
