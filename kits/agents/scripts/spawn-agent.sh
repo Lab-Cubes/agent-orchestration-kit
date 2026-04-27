@@ -1209,17 +1209,19 @@ PYEOF
 
     # --- Schema validation ---
     local schema_file="$NPS_DIR/src/schemas/task-list.schema.json"
+    local schema_stderr_file
+    schema_stderr_file=$(mktemp)
     local schema_exit=0
-    python3 "$NPS_DIR/scripts/lib/validate_schema.py" "$schema_file" "$tmp_output" 2>&1 \
-        | while IFS= read -r line; do err "  schema: $line"; done || true
-    python3 "$NPS_DIR/scripts/lib/validate_schema.py" "$schema_file" "$tmp_output" >/dev/null 2>&1 \
-        || schema_exit=$?
+    python3 "$NPS_DIR/scripts/lib/validate_schema.py" "$schema_file" "$tmp_output" \
+        >/dev/null 2>"$schema_stderr_file" || schema_exit=$?
     if [[ "$schema_exit" -ne 0 ]]; then
-        rm -f "$tmp_output"
+        while IFS= read -r line; do err "  schema: $line"; done < "$schema_stderr_file"
+        rm -f "$schema_stderr_file" "$tmp_output"
         err "cmd_decompose: Decomposer output failed task-list schema validation"
         _append_decompose_event "decomposer_failed" "schema_violation" "null"
         exit 1
     fi
+    rm -f "$schema_stderr_file"
 
     # --- NOP DAG validation (NPS-5 §3.1.1) ---
     local dag_result
