@@ -102,6 +102,19 @@ print(json.dumps({
 PYEOF
 }
 
+_set_decomposer_cmd() {
+    local decomposer_cmd="$1"
+    python3 - "$KIT_TREE/config.json" "$decomposer_cmd" <<'PYEOF'
+import json, sys
+config_file, decomposer_cmd = sys.argv[1:]
+d = json.load(open(config_file))
+d["decomposer_cmd"] = decomposer_cmd
+with open(config_file, "w") as f:
+    json.dump(d, f, indent=2)
+    f.write("\n")
+PYEOF
+}
+
 # Assert all nodes in plan's state file have the expected status.
 _assert_all_status() {
     local plan_id="$1" expected="$2"
@@ -304,4 +317,56 @@ PYEOF
     MOCK_CLAUDE_MODE=pushback run_dt plan-e2e-009 > /dev/null || true
 
     [ ! -f "$NPS_TASKLISTS_HOME/plan-e2e-009/pending/v2.json" ]
+}
+
+# ---------------------------------------------------------------------------
+# 10. Pushback: custom decomposer success preserves worker reason
+# ---------------------------------------------------------------------------
+
+@test "pushback success: escalation logs invoked_decomposer with worker reason" {
+    _seed_plan "plan-e2e-010"
+    _run_e2e decompose <<< "$(_decompose_input plan-e2e-010)" > /dev/null
+    _run_e2e ack plan-e2e-010 1 > /dev/null
+    _set_decomposer_cmd "$BATS_TEST_DIRNAME/fixtures/decomposer-pushback-success.py"
+
+    MOCK_CLAUDE_MODE=pushback run_dt plan-e2e-010 > /dev/null || true
+
+    run python3 - "$NPS_TASKLISTS_HOME/plan-e2e-010/escalation.jsonl" <<'PYEOF'
+import json, sys
+events = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+matches = [
+    e for e in events
+    if e.get("dispatcher_acted") == "invoked_decomposer"
+    and e.get("pushback_reason") == "scope_insufficient"
+    and e.get("prior_version") == 1
+    and e.get("decomposer_output_version") == 2
+]
+assert matches, f"no positive pushback invoked_decomposer event in {events}"
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 11. Pushback: custom decomposer writes pending/v2.json
+# ---------------------------------------------------------------------------
+
+@test "pushback success: pending/v2.json written with matching plan_id" {
+    _seed_plan "plan-e2e-011"
+    _run_e2e decompose <<< "$(_decompose_input plan-e2e-011)" > /dev/null
+    _run_e2e ack plan-e2e-011 1 > /dev/null
+    _set_decomposer_cmd "$BATS_TEST_DIRNAME/fixtures/decomposer-pushback-success.py"
+
+    MOCK_CLAUDE_MODE=pushback run_dt plan-e2e-011 > /dev/null || true
+
+    run python3 - "$NPS_TASKLISTS_HOME/plan-e2e-011/pending/v2.json" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["plan_id"] == "plan-e2e-011", d["plan_id"]
+assert d["version_id"] == 2, d["version_id"]
+assert d["prior_version"] == 1, d["prior_version"]
+assert d["pushback_reason"] == "scope_insufficient", d["pushback_reason"]
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
 }
