@@ -8,7 +8,13 @@ _Who this is for: you just ran a dispatch and saw "NPT" in the cost log. This pa
 
 ## What is NPT?
 
-NPT (NPS Token) is the raw count of tokens the worker used during a task — input tokens plus output tokens plus any cache-read tokens. It tells you how much "thinking work" the worker did.
+NPT (NPS Token) is the cross-model standardized unit from NPS-0 §4.3. All four token channels reported by the runtime are counted:
+
+```
+NPT = ceil((input_tokens + output_tokens + cache_read_input_tokens + cache_creation_input_tokens) × rate)
+```
+
+`rate` is the model-family exchange rate from `config.json::npt_exchange_rates` (Claude family: 1.05). It tells you how much "thinking work" the worker did, normalized across model families.
 
 You care about NPT because it's the number you use to set budgets, compare task costs, and decide when a task is getting too expensive.
 
@@ -34,6 +40,18 @@ Pass `--budget` to cap how many NPT a task may use:
 
 If you skip `--budget`, the dispatcher reads `category_budget_npt` from `config.json` and uses the value for that category (e.g. `"code": 40000`). The budget is a ceiling on the intent file — the worker sees it and should stop before exceeding it.
 
+### USD-aware budgeting
+
+If you want to reason about cost in USD rather than NPT, `config.json` exposes three knobs (full definitions in `config.example.json`):
+
+| Key | What it does |
+|-----|--------------|
+| `model_rates.{sonnet\|haiku\|opus}.npt_usd` | USD cost per NPT for each model family — multiply by `cost_npt` for an approximate USD figure. |
+| `category_usd_cap` | Per-category hard USD ceiling, checked alongside `category_budget_npt`; whichever is lower wins. |
+| `nop_overhead_usd` | Fixed USD overhead per dispatch (infrastructure, API roundtrips) — added to the per-task estimate. |
+
+NPT is still the primary budgeting unit; these knobs let you cross-check NPT ceilings against your actual spend targets without wiring the dispatcher directly to live pricing APIs.
+
 **Example dispatch output:**
 ```
 [nps] Creating worktree: .../kits/agents/worktrees/task-operator-20260419-142300 (branch: agent/coder-01/task-operator-20260419-142300)
@@ -50,7 +68,7 @@ After each dispatch completes, a row is appended to `kits/agents/logs/dispatch-c
 
 **CSV header:**
 ```
-timestamp,task_id,agent_id,model,category,priority,budget_npt,cost_npt,turns,duration_s,denials,status
+timestamp,task_id,agent_id,model,category,priority,budget_npt,cost_npt,turns,duration_s,denials,status,overshoot_ratio
 ```
 
 Rows are written with every field wrapped in double quotes (e.g. `"5000"` not `5000`). The annotation below strips the quotes for readability.
@@ -69,7 +87,8 @@ normal,                       ← priority
 12,                           ← turns — how many back-and-forth rounds
 87,                           ← duration_s — wall-clock seconds
 0,                            ← denials — permission denials during run
-success                       ← status
+success,                      ← status
+0.7642                        ← overshoot_ratio = round(cost_npt / budget_npt, 4)
 ```
 
 The column that matters most for tuning is **cost_npt** (column 8).
@@ -126,7 +145,7 @@ One line each. Canonical definitions live in the [NPS-Release specs](https://git
 
 | Acronym | What it means |
 |---------|--------------|
-| **NPT** | NPS Token — raw token count (input + output + cache_read) used by a worker. [NPS-0 §4.3](https://github.com/labacacia/NPS-Release) |
+| **NPT** | NPS Token — raw token count (input + output + cache_read + cache_creation) used by a worker, multiplied by a model-family exchange rate. [NPS-0 §4.3](https://github.com/labacacia/NPS-Release) |
 | **NPS** | Neural Protocol Suite — the protocol family this kit implements. [NPS-0](https://github.com/labacacia/NPS-Release) |
 | **NCP** | Neural Communication Protocol — AI-to-AI frame format, encoding, semantic compression. [NPS-1](https://github.com/labacacia/NPS-Release) |
 | **NWP** | Neural Web Protocol — how AI agents access Web-like nodes. [NPS-2](https://github.com/labacacia/NPS-Release) |
