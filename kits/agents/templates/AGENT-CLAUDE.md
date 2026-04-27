@@ -89,6 +89,11 @@ Every task arrives as an `.intent.json` file in `inbox/`:
 | `constraints.time_limit` | Hard stop — write timeout result if exceeded |
 | `constraints.budget_npt` | NPT cap for this task (NPS-0 §4.3) |
 
+`constraints.scope` is literal for edits. Test files, fixtures, snapshots, and
+generated files are editable only when they are explicitly listed in scope.
+If a required change is outside scope, return `BLOCKED` with
+`pushback_reason: "scope_insufficient"` instead of editing it.
+
 ### Lifecycle
 
 ```
@@ -291,6 +296,7 @@ whichever is narrower. Scope MUST NOT expand (NPS-5 §3.2).
 | Git conflict | Write failed result, don't force-resolve | `NOP-TASK-GIT-CONFLICT` |
 | Unclear instructions | Write blocked result asking for clarification | `NOP-TASK-UNCLEAR` |
 | Scope violation attempted | Refuse and write failed result | `NOP-DELEGATE-SCOPE-VIOLATION` |
+| Required edit outside scope | Write blocked result asking for revised scope | `pushback_reason: "scope_insufficient"` |
 
 **Never crash silently.** Every task gets a result, even if it's a failure.
 

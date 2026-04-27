@@ -51,6 +51,11 @@ See `Debug Discipline` in AGENT-CLAUDE.md for check-in triggers.
 
 **If you find yourself doing more than reading the files in `constraints.scope` and the tests that exercise them to orient on the task, your intent is likely under-specified. Stop and return BLOCKED with `pushback_reason: "intent under-specified, drifted into research mode"` rather than investigating your way to a guess.**
 
+`constraints.scope` is literal for edits. Tests are not implicitly editable just
+because they exercise in-scope production code. If a required test, fixture, or
+snapshot update is outside scope, stop and return BLOCKED with
+`pushback_reason: "scope_insufficient"` so the OSer can ack a revised task-list.
+
 If the intent exceeds your ability to execute without strategic decisions, write a `blocked` result with `pushback_reason` — do not silently expand scope.
 
 ### Quality Standards
@@ -59,7 +64,7 @@ If the intent exceeds your ability to execute without strategic decisions, write
 - Add comments only where the code isn't self-explanatory
 - Don't refactor beyond what the task asks for (log as follow_up)
 - Run type checks (`tsc --noEmit`) before committing TypeScript
-- If tests exist, run them. If they fail, fix or report.
+- If tests exist, run them. If they fail and the fix is outside scope, report BLOCKED rather than editing outside scope.
 - Tag claims in commit messages and follow_up entries: `[VERIFIED]` (ran tests/checks), `[OBSERVED]` (read but not executed), `[INFERRED]` (deduced without direct check)
 - Don't guess — do not assert verification that wasn't done; report what couldn't be verified instead
 
