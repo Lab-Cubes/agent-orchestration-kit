@@ -287,6 +287,8 @@ cmd_dispatch() {
     local dry_run=false
     local target_branch=""
     local branch_name_override=""
+    local plan_id=""
+    local success_criteria_file=""
 
     _budget_for_category() {
         if [[ -f "$CONFIG_FILE" ]]; then
@@ -317,6 +319,8 @@ PYEOF
             --runtime)       runtime="$2"; shift 2 ;;
             --branch-name)   branch_name_override="$2"; shift 2 ;;
             --target-branch) target_branch="$2"; shift 2 ;;
+            --plan-id)       plan_id="$2"; shift 2 ;;
+            --success-criteria-file) success_criteria_file="$2"; shift 2 ;;
             *) err "Unknown option: $1"; exit 1 ;;
         esac
     done
@@ -410,12 +414,12 @@ PYEOF
     python3 - \
         "$intent_text" "$task_id" "$ISSUER_DOMAIN" "$ISSUER" "$agent_id" \
         "$created_at" "$priority" "$category" "$scope" "$model" \
-        "$time_limit" "$budget" "$context_json" \
+        "$time_limit" "$budget" "$context_json" "$plan_id" "$success_criteria_file" \
         <<'PYEOF' > "$tmp_intent"
-import json, sys
+import json, os, sys
 (_, intent_text, task_id, issuer_domain, issuer, agent_id,
  created_at, priority, category, scope_str, model,
- time_limit, budget, context_json) = sys.argv
+ time_limit, budget, context_json, plan_id, success_criteria_file) = sys.argv
 
 scope_list = [s for s in scope_str.split(',') if s] if scope_str else []
 
@@ -447,6 +451,11 @@ intent = {
         },
     },
 }
+if plan_id:
+    intent['payload']['plan_id'] = plan_id
+if success_criteria_file and os.path.isfile(success_criteria_file):
+    with open(success_criteria_file) as f:
+        intent['payload']['success_criteria'] = json.load(f)
 print(json.dumps(intent, indent=2))
 PYEOF
 
@@ -715,9 +724,9 @@ PYEOF
         local completed_at
         completed_at=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
         python3 - "$task_id" "$status_val" "$agent_id" "$created_at" "$completed_at" \
-            "$duration" "$cost_npt" "$turns" "$stop_reason" "$ISSUER_DOMAIN" "$result" << 'PYEOF' > "$agent_result" 2>/dev/null
+            "$duration" "$cost_npt" "$turns" "$stop_reason" "$ISSUER_DOMAIN" "$result" "$plan_id" << 'PYEOF' > "$agent_result" 2>/dev/null
 import json, sys
-_, task_id, status_val, agent_id, picked_up, completed, duration, cost_npt, turns, stop, issuer_domain, worker_result = sys.argv
+_, task_id, status_val, agent_id, picked_up, completed, duration, cost_npt, turns, stop, issuer_domain, worker_result, plan_id = sys.argv
 fallback_value = worker_result if worker_result and worker_result not in ('NO JSON OUTPUT', 'NO RESULT', 'PARSE ERROR') else f"Fallback result (worker did not complete NOP lifecycle). Stop reason: {stop}. Check raw-output.json."
 result = {
     "_ncp": 1,
@@ -743,7 +752,21 @@ result = {
         "_stop_reason": stop
     }
 }
+if plan_id:
+    result["payload"]["plan_id"] = plan_id
 print(json.dumps(result, indent=2))
+PYEOF
+    fi
+
+    # Task-list dispatch owns the plan boundary. Workers may omit the optional
+    # back-pointer, so stamp it before merge-hold reads result.payload.plan_id.
+    if [[ -n "$plan_id" && -f "$agent_result" ]]; then
+        RESULT_FILE="$agent_result" PLAN_ID="$plan_id" python3 - <<'PYEOF' 2>/dev/null || true
+import json, os
+path = os.environ['RESULT_FILE']
+d = json.load(open(path))
+d.setdefault('payload', {})['plan_id'] = os.environ['PLAN_ID']
+open(path, 'w').write(json.dumps(d, indent=2) + '\n')
 PYEOF
     fi
 
@@ -2375,9 +2398,25 @@ PYEOF
             timeout_s=$(_dt_node_field "$node_id" 6)
 
             local dispatch_log="$wave_tmp_dir/$node_id.log"
+            local success_criteria_file="$wave_tmp_dir/$node_id.success_criteria.json"
+            python3 - "$task_list_file" "$node_id" "$success_criteria_file" <<'PYEOF'
+import json, sys
+tl_file, node_id, out_file = sys.argv[1:]
+tl = json.load(open(tl_file))
+for node in tl['dag']['nodes']:
+    if node['id'] == node_id:
+        with open(out_file, 'w') as f:
+            json.dump(node.get('success_criteria') or {}, f)
+            f.write('\n')
+        break
+else:
+    raise SystemExit(f"node not found: {node_id}")
+PYEOF
 
             local -a dispatch_args=("$agent_id" "$action" \
-                "--budget" "$budget" "--time-limit" "$timeout_s")
+                "--budget" "$budget" "--time-limit" "$timeout_s" \
+                "--plan-id" "$plan_id" \
+                "--success-criteria-file" "$success_criteria_file")
             [[ -n "$scope_csv" ]] && dispatch_args+=("--scope" "$scope_csv")
 
             log "cmd_dispatch_tasklist: dispatching node $node_id → agent $agent_id"
