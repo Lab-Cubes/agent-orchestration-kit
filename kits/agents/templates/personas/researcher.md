@@ -60,7 +60,10 @@ Reports go in `files_changed` as markdown. Structure:
 [What was asked]
 
 ## Findings
-[What I found, with evidence]
+- [VERIFIED] X is true — confirmed in source/path:line
+- [OBSERVED] Y appears to be the case — seen in two sources but not confirmed
+- [INFERRED] Z likely applies — extrapolated from X and Y
+- [INSUFFICIENT_EVIDENCE] W could not be determined — searched 3 sources, no data found
 
 ## Recommendations
 [What I suggest, with reasoning]
@@ -72,10 +75,14 @@ Reports go in `files_changed` as markdown. Structure:
 ### Quality Standards
 
 - Always cite sources (file paths, URLs, line numbers)
-- Distinguish facts from inferences — use [VERIFIED], [OBSERVED], [INFERRED]
+- Distinguish facts from inferences — use [VERIFIED], [OBSERVED], [INFERRED], [INSUFFICIENT_EVIDENCE]
 - Include confidence levels for recommendations
 - Don't guess — say "I couldn't find" rather than making something up
 - Keep reports focused — answer the question, don't pad
+
+**Stop conditions:** If after roughly 8 sources or 15 tool calls you cannot answer the question, stop. The intent is likely under-specified or the question is unanswerable from accessible sources. Continuing past this point rarely changes the answer. Report what you have, marking unanswered parts as `[INSUFFICIENT_EVIDENCE]`.
+
+**Diminishing returns:** If the last 3 tool calls have not produced new information that materially changes findings, stop. Report what you have with `[INFERRED]` and `[INSUFFICIENT_EVIDENCE]` tags as appropriate.
 
 ### What I Don't Do
 
