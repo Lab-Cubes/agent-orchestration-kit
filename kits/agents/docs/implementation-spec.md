@@ -387,6 +387,11 @@ Category-specific budgets override `default_budget_npt` when the dispatcher has
 a matching `category_budget_npt.<category>` entry. Explicit `--budget` on the
 dispatch command overrides both config defaults.
 
+The bundled trivial decomposer reads `default_budget_npt` and
+`default_time_limit_s` from `config.json` for its single emitted node. If
+`config.json` cannot be read, it warns on stderr and falls back to the documented
+defaults: `40000` NPT and `900000` ms.
+
 `persona_set: "personas"` is the tightened worker set. It expects narrow,
 well-decomposed task scopes. If you run the trivial decomposer (`scope: ["."]`)
 with tightened personas, workers may correctly return `BLOCKED` for broad
