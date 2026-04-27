@@ -13,7 +13,7 @@
   ],
 
   "default_budget_npt": 40000,
-  "$comment_budget": "Default per-task NPT ceiling. NPT = NPS Token (raw sum of input + output + cache_read tokens, per NPS-0 §4.3 approximation). Override per-dispatch via --budget or per-category via category_budget_npt below.",
+  "$comment_budget": "Default per-task NPT ceiling. NPT = NPS Token (raw sum of input + output + cache_read + cache_creation tokens, multiplied by model-family exchange rate, per NPS-0 §4.3). Override per-dispatch via --budget or per-category via category_budget_npt below.",
 
   "category_budget_npt": {
     "$comment": "Per-category NPT ceiling. Used as the default --budget when the operator does not set one. Operators may override per-dispatch with --budget. Calibrate these values against actual NPT usage in your workload — reference values below are tuned for Sonnet at our typical patterns.",
