@@ -83,14 +83,22 @@ PYEOF
 }
 
 # Write a schema-valid TaskListMessage JSON to the given output path.
-# Args: output_path node_count [add_cycle=false]
+# Args: output_path node_count [add_cycle=false] [plan_id] [version_id] [prior_version_or_null]
 _write_mock_task_list() {
     local out_path="$1"
     local node_count="${2:-1}"
     local add_cycle="${3:-false}"
-    python3 - "$out_path" "$node_count" "$add_cycle" <<'PYEOF'
+    local plan_id="${4:-$PLAN_ID}"
+    local version_id="${5:-1}"
+    local prior_version="${6:-null}"
+    python3 - "$out_path" "$node_count" "$add_cycle" "$plan_id" "$version_id" "$prior_version" <<'PYEOF'
 import json, sys
-out_path, node_count, add_cycle = sys.argv[1], int(sys.argv[2]), sys.argv[3] == 'true'
+out_path = sys.argv[1]
+node_count = int(sys.argv[2])
+add_cycle = sys.argv[3] == 'true'
+plan_id = sys.argv[4]
+version_id = int(sys.argv[5])
+prior_version = None if sys.argv[6] == 'null' else int(sys.argv[6])
 
 def node(i):
     return {
@@ -108,10 +116,10 @@ edges = ([{"from": "node-0", "to": "node-1"}, {"from": "node-1", "to": "node-0"}
 
 json.dump({
     "_ncp": 1, "type": "task_list", "schema_version": 1,
-    "plan_id": "plan-test-20260425-120000", "version_id": 1,
+    "plan_id": plan_id, "version_id": version_id,
     "created_at": "2026-04-25T12:00:00Z",
     "created_by": "urn:nps:agent:test.localhost:mock-decomposer",
-    "prior_version": None, "pushback_reason": None,
+    "prior_version": prior_version, "pushback_reason": None,
     "dag": {"nodes": nodes, "edges": edges},
 }, open(out_path, 'w'))
 PYEOF
@@ -158,6 +166,9 @@ _require_jsonschema() {
     echo "$output" | grep -q "decompose"
     echo "$output" | grep -q "pending"
     echo "$output" | grep -q "prior_version"
+    echo "$output" | grep -q "KIT-DECOMP-PLAN-MISMATCH"
+    echo "$output" | grep -q "KIT-DECOMP-VERSION-MISMATCH"
+    echo "$output" | grep -q "KIT-DECOMP-PRIOR-VERSION-MISMATCH"
 }
 
 # ---------------------------------------------------------------------------
@@ -346,7 +357,115 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 10 — DAG-cycle (node-0 → node-1 → node-0)
+# 10 — Semantic validation: plan_id mismatch
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: plan_id mismatch exits 1 with KIT-DECOMP-PLAN-MISMATCH" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/wrong-plan.json"
+    _write_mock_task_list "$semantic_file" 1 false "plan-wrong-20260425-120000" 1 null
+
+    cat > "$KIT_TMPDIR/wrong-plan.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/wrong-plan.py"
+    _override_decomposer "python3 $KIT_TMPDIR/wrong-plan.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-PLAN-MISMATCH", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 11 — Semantic validation: version_id mismatch
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: version_id mismatch exits 1 with KIT-DECOMP-VERSION-MISMATCH" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/wrong-version.json"
+    _write_mock_task_list "$semantic_file" 1 false "$PLAN_ID" 2 null
+
+    cat > "$KIT_TMPDIR/wrong-version.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/wrong-version.py"
+    _override_decomposer "python3 $KIT_TMPDIR/wrong-version.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-VERSION-MISMATCH", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 12 — Semantic validation: prior_version mismatch
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: prior_version mismatch exits 1 with KIT-DECOMP-PRIOR-VERSION-MISMATCH" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/wrong-prior-version.json"
+    _write_mock_task_list "$semantic_file" 1 false "$PLAN_ID" 2 null
+
+    cat > "$KIT_TMPDIR/wrong-prior-version.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/wrong-prior-version.py"
+    _override_decomposer "python3 $KIT_TMPDIR/wrong-prior-version.py"
+
+    local fixture
+    fixture=$(_write_fixture "$PLAN_ID" 1)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v2.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-PRIOR-VERSION-MISMATCH", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 13 — DAG-cycle (node-0 → node-1 → node-0)
 # ---------------------------------------------------------------------------
 
 @test "DAG-cycle: exits 1, decomposer_failed/NOP-TASK-DAG-CYCLE event" {
@@ -382,7 +501,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 11 — Pushback path: trivial decomposer refuses re-emission, escalates
+# 14 — Pushback path: trivial decomposer refuses re-emission, escalates
 # ---------------------------------------------------------------------------
 
 @test "pushback path: prior_version=1 causes trivial decomposer refusal, decomposer_failed/pushback_unsupported event" {
@@ -408,7 +527,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 12 — Config override: custom decomposer_cmd used
+# 15 — Config override: custom decomposer_cmd used
 # ---------------------------------------------------------------------------
 
 @test "config override: custom decomposer_cmd in config.json is used" {

@@ -906,14 +906,14 @@ cmd_clean() {
 #
 # Reads DecomposeInput JSON from stdin, invokes the configured Decomposer
 # subprocess with a timeout (SIGTERM → 2s grace → SIGKILL), validates the
-# output against task-list.schema.json and NOP DAG constraints, writes
+# output against task-list.schema.json, semantic identity invariants, and NOP DAG constraints, writes
 # task-lists/{plan-id}/pending/v{N}.json, and appends an escalation event.
 # Emits the absolute path of the written pending file on stdout.
 #
 # Exit codes:
 #   0  — success; pending file written, path on stdout
 #   1  — failure (non-zero decomposer exit / timeout / schema violation /
-#          DAG violation); decomposer_failed escalation event appended
+#          semantic / DAG violation); decomposer_failed escalation event appended
 #   2  — invocation error (bad stdin JSON, missing plan_id, config error)
 #
 # Usage: echo "$json_input" | spawn-agent.sh decompose [--help]
@@ -940,7 +940,7 @@ Output (stdout on success):
 
 Exit codes:
   0  — success; pending file written, absolute path on stdout
-  1  — Decomposer failure (non-zero exit / timeout / schema / DAG violation);
+  1  — Decomposer failure (non-zero exit / timeout / schema / semantic / DAG violation);
        decomposer_failed escalation event appended to escalation.jsonl
   2  — Invocation error (bad stdin JSON, missing plan_id, config error)
 
@@ -953,6 +953,14 @@ Config knobs (config.json):
 NOP DAG validation (NPS-5 §3.1.1, enforced before writing pending file):
   - Node count <= 32  → violation: NOP-TASK-DAG-TOO-LARGE
   - Acyclic            → violation: NOP-TASK-DAG-CYCLE
+
+Semantic validation (kit invariants, enforced before DAG validation):
+  - Task-list plan_id matches input plan frontmatter
+      → violation: KIT-DECOMP-PLAN-MISMATCH
+  - Task-list version_id == prior_version_id + 1
+      → violation: KIT-DECOMP-VERSION-MISMATCH
+  - Re-decompose task-list prior_version == input prior_version_id
+      → violation: KIT-DECOMP-PRIOR-VERSION-MISMATCH
 
 Artifacts:
   task-lists/{plan-id}/pending/v{N}.json  — awaiting OSer ack (cmd_ack)
@@ -1252,6 +1260,38 @@ PYEOF
         exit 1
     fi
     rm -f "$schema_stderr_file"
+
+    # --- Semantic identity validation (kit invariants) ---
+    local semantics_stderr_file
+    semantics_stderr_file=$(mktemp)
+    local semantics_exit=0
+    INPUT_PLAN_ID="$plan_id" PRIOR_VERSION_ID="$prior_version_id" \
+        python3 "$NPS_DIR/scripts/lib/validate_tasklist_semantics.py" "$tmp_output" \
+        >/dev/null 2>"$semantics_stderr_file" || semantics_exit=$?
+    if [[ "$semantics_exit" -ne 0 ]]; then
+        local semantic_reason="semantic_violation"
+        if [[ "$semantics_exit" -eq 1 ]]; then
+            while IFS= read -r line; do err "  semantic: $line"; done < "$semantics_stderr_file"
+            semantic_reason=$(python3 - "$semantics_stderr_file" <<'PYEOF'
+import sys
+for line in open(sys.argv[1]):
+    line = line.strip()
+    if line:
+        print(line.split(':', 1)[0])
+        break
+else:
+    print("semantic_violation")
+PYEOF
+)
+        else
+            while IFS= read -r line; do err "  semantic-validator: $line"; done < "$semantics_stderr_file"
+        fi
+        rm -f "$semantics_stderr_file" "$tmp_output"
+        err "cmd_decompose: Decomposer output failed task-list semantic validation"
+        _append_decompose_event "decomposer_failed" "$semantic_reason" "null"
+        exit 1
+    fi
+    rm -f "$semantics_stderr_file"
 
     # --- NOP DAG validation (NPS-5 §3.1.1) ---
     local dag_result
