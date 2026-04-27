@@ -78,6 +78,34 @@ PYEOF
     [ "$status" -eq 0 ]
 }
 
+_assert_task_result_plan_id() {
+    local plan_id="$1"
+    run python3 - "$NPS_TASKLISTS_HOME/$plan_id/task-list-state.json" "$KIT_AGENTS" "$plan_id" <<'PYEOF'
+import json, os, sys
+state_file, agents_home, plan_id = sys.argv[1:]
+state = json.load(open(state_file))
+task_ids = [
+    ns.get("task_id")
+    for ns in state["node_states"].values()
+    if ns.get("task_id")
+]
+assert task_ids, "expected at least one dispatched task_id"
+for task_id in task_ids:
+    found = False
+    for worker in os.listdir(agents_home):
+        result_file = os.path.join(agents_home, worker, "done", f"{task_id}.result.json")
+        if not os.path.isfile(result_file):
+            continue
+        found = True
+        result = json.load(open(result_file))
+        actual = result.get("payload", {}).get("plan_id")
+        assert actual == plan_id, f"{task_id}: expected plan_id {plan_id!r}, got {actual!r}"
+    assert found, f"{task_id}: result file not found"
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # 1. Single-task happy path
 # ---------------------------------------------------------------------------
@@ -89,6 +117,7 @@ PYEOF
     [ "$status" -eq 0 ]
 
     _assert_all_completed plan-single
+    _assert_task_result_plan_id plan-single
 }
 
 # ---------------------------------------------------------------------------
