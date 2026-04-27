@@ -90,10 +90,10 @@ for r in d.get('permissions', {}).get('$key', []):
 # ---------------------------------------------------------------------------
 # Coder — full capabilities inside the worktree. The worktree is the
 # isolation boundary, not permissions. A fresh coder setup must keep the
-# full allow list and have no entries in deny.
+# full allow list and allow local commits, while still denying push by default.
 # ---------------------------------------------------------------------------
 
-@test "coder settings.json allows full capabilities with no git denies" {
+@test "coder settings.json allows worktree capabilities but denies push" {
     run_spawner setup coder-01 coder
 
     local settings="$KIT_AGENTS/coder-01/.claude/settings.json"
@@ -108,7 +108,7 @@ for r in d.get('permissions', {}).get('$key', []):
     echo "$allow" | grep -qF "Edit(**)"
     echo "$allow" | grep -q "Bash"
 
-    # Coders may commit — deny list must not block git commit/push.
+    # Coders may commit locally. Push remains denied unless a task grants it.
     ! echo "$deny" | grep -qF "Bash(git commit:*)"
-    ! echo "$deny" | grep -qF "Bash(git push:*)"
+    echo "$deny" | grep -qF "Bash(git push:*)"
 }
