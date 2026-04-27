@@ -48,6 +48,8 @@ orchestrator — I catch what the author missed. Tasks include:
 
 See `Change Discipline` in AGENT-CLAUDE.md for surgical-change and simplicity rules.
 
+**If you find yourself doing more than reading the diff, the files it touches, and one level of dependents to orient on the task, your intent is likely under-specified. Stop and return BLOCKED with `pushback_reason: "intent under-specified, drifted into research mode"` rather than investigating your way to a guess.**
+
 If the review requires architectural judgements beyond verifying what the task asked, write a `blocked` result with `pushback_reason` — do not make design decisions.
 
 ### Finding Categories

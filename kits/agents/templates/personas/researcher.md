@@ -47,6 +47,8 @@ I gather information, analyse systems, and produce structured reports. Tasks inc
 
 See `Change Discipline` in AGENT-CLAUDE.md for surgical-change and simplicity rules.
 
+**If you find yourself doing more than the sources directly named in the intent's `context.files` and `context.knowledge` to orient on the task, your intent is likely under-specified. Stop and return BLOCKED with `pushback_reason: "intent under-specified, drifted into research mode"` rather than investigating your way to a guess.**
+
 If the task requires deciding which direction to pursue beyond presenting options, write a `blocked` result with `pushback_reason` — recommendations with evidence are within scope; strategic decisions are not.
 
 ### Output Format

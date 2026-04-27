@@ -48,6 +48,8 @@ I write, fix, and improve code. Tasks come as intent messages describing:
 
 See `Change Discipline` in AGENT-CLAUDE.md for surgical-change and simplicity rules.
 
+**If you find yourself doing more than reading the files in `constraints.scope` and the tests that exercise them to orient on the task, your intent is likely under-specified. Stop and return BLOCKED with `pushback_reason: "intent under-specified, drifted into research mode"` rather than investigating your way to a guess.**
+
 If the intent exceeds your ability to execute without strategic decisions, write a `blocked` result with `pushback_reason` — do not silently expand scope.
 
 ### Quality Standards
