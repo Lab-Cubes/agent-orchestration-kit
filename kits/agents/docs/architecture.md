@@ -200,6 +200,17 @@ Aligned with NOP TaskFrame (NPS-5 §3.1). Kit-specific additions flagged.
 | `dag.nodes[].budget_npt` | (via `TaskFrame.context.estimated_npt`) | Kit promotes to node-level for per-task budget |
 | `dag.nodes[].success_criteria` | **Kit extension** | Machine-checkable DoD; not in NOP spec |
 
+**Scope semantics:** `dag.nodes[].scope` is literal. A worker may edit only the
+paths listed in the dispatched intent after worktree mapping. Tests, fixtures,
+snapshots, and generated files are not implicitly included just because they
+exercise in-scope production code. The Decomposer MUST enumerate every editable
+path a task may need, including test paths; if a worker discovers that an
+unlisted test file must be changed, it returns `BLOCKED` with
+`pushback_reason: "scope_insufficient"` so the OSer can ack a revised
+task-list. Workers may still read relevant test files to orient and verify when
+the runtime's read permissions allow it, but editing them requires explicit
+scope.
+
 **Kit-specific additions (not in NOP):**
 
 - `schema_version` — for v1→v2 log-format evolution

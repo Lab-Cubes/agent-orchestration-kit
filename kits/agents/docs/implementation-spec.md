@@ -423,7 +423,8 @@ Use this checklist to verify a new runtime port implements the protocol correctl
 - [ ] `_ncp == 1` check passes before processing.
 - [ ] `type == "intent"` check passes before processing.
 - [ ] `payload.id` is used as the canonical task ID throughout.
-- [ ] `payload.constraints.scope` is respected — worker stays within scope.
+- [ ] `payload.constraints.scope` is respected literally — worker edits only listed paths.
+- [ ] Associated tests are editable only when explicitly listed in `payload.constraints.scope`.
 - [ ] `payload.constraints.time_limit` is enforced — write timeout result on exceed.
 
 ### Result writing
@@ -469,6 +470,7 @@ Use this checklist to verify a new runtime port implements the protocol correctl
 - [ ] Git conflict → write `failed` result with `NOP-TASK-GIT-CONFLICT`.
 - [ ] Unclear instructions → write `blocked` result with `NOP-TASK-UNCLEAR`.
 - [ ] Scope expansion attempted → write `failed` result with `NOP-DELEGATE-SCOPE-VIOLATION`.
+- [ ] Needs to edit an unscoped test/fixture/snapshot for in-scope code → write `blocked` result with `pushback_reason: "scope_insufficient"`; do not edit it.
 
 ---
 
