@@ -464,7 +464,6 @@ The reference calls:
 ```bash
 claude -p '<prompt>' \
   --add-dir <scope> \
-  --max-budget-usd <cap> \
   --output-format json \
   --model <model> \
   --permission-mode dontAsk \
@@ -474,11 +473,12 @@ claude -p '<prompt>' \
 
 A port replaces this line with the target runtime's equivalent invocation.
 
-### Cost reporting
+### NPT reporting
 
-The reference parses `total_cost_usd`, `usage.input_tokens`,
-`usage.output_tokens`, `usage.cache_read_input_tokens` from the Claude CLI's
-JSON output. Other runtimes report differently — OpenAI API returns
+The reference parses `usage.input_tokens`, `usage.output_tokens`,
+`usage.cache_read_input_tokens`, and `usage.cache_creation_input_tokens` from
+the runtime's JSON output, then converts native token counts to NPT per §8.
+Other runtimes report differently — OpenAI API returns
 `usage.prompt_tokens` + `usage.completion_tokens`; local models may report
 nothing. The port adjusts the parser and the NPT-approximation formula (§8)
 accordingly.
@@ -492,9 +492,11 @@ implements scope enforcement appropriate to its runtime.
 
 ### Budget ceiling
 
-`--max-budget-usd` is the Claude CLI's hard kill-switch. Other runtimes may
-lack an equivalent; ports can implement their own budget tracking via the turn
-counter or a cost accumulator that aborts when `budget_npt` is exceeded.
+The reference enforces `budget_npt` in the dispatcher by accumulating NPT from
+runtime usage events and aborting when the configured soft cap is reached.
+Other runtimes may lack per-event usage reporting; ports must either implement
+equivalent NPT accounting or document that `budget_npt` enforcement is not
+available for that runtime.
 
 ### Model selection
 

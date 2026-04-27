@@ -40,18 +40,6 @@ Pass `--budget` to cap how many NPT a task may use:
 
 If you skip `--budget`, the dispatcher reads `category_budget_npt` from `config.json` and uses the value for that category (e.g. `"code": 40000`). The budget is a ceiling on the intent file — the worker sees it and should stop before exceeding it.
 
-### USD-aware budgeting
-
-If you want to reason about cost in USD rather than NPT, `config.json` exposes three knobs (full definitions in `config.example.json`):
-
-| Key | What it does |
-|-----|--------------|
-| `model_rates.{sonnet\|haiku\|opus}.npt_usd` | USD cost per NPT for each model family — multiply by `cost_npt` for an approximate USD figure. |
-| `category_usd_cap` | Per-category hard USD ceiling, checked alongside `category_budget_npt`; whichever is lower wins. |
-| `nop_overhead_usd` | Fixed USD overhead per dispatch (infrastructure, API roundtrips) — added to the per-task estimate. |
-
-NPT is still the primary budgeting unit; these knobs let you cross-check NPT ceilings against your actual spend targets without wiring the dispatcher directly to live pricing APIs.
-
 **Example dispatch output:**
 ```
 [nps] Creating worktree: .../kits/agents/worktrees/task-operator-20260419-142300 (branch: agent/coder-01/task-operator-20260419-142300)
