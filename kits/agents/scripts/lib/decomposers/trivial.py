@@ -50,6 +50,15 @@ def _emit(inp: dict) -> dict:
     prior_version = inp.get("prior_version")
     pushback = inp.get("pushback")
 
+    if prior_version is not None or pushback is not None:
+        print(
+            "trivial-decomposer: cannot respond to pushback; this decomposer emits identical\n"
+            "output regardless of pushback_reason. Configure a sophisticated decomposer via\n"
+            "config.json::decomposer_cmd, or escalate to the OSer for manual re-decomposition.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     fm = _parse_frontmatter(plan_text)
     plan_id = fm.get("plan_id", "").strip()
     if not plan_id:
@@ -57,12 +66,7 @@ def _emit(inp: dict) -> dict:
 
     title = fm.get("title", "execute-plan")
     action = _derive_action(title)
-    if isinstance(prior_version, dict):
-        version_id = prior_version.get('version_id', 0) + 1
-    elif isinstance(prior_version, int):
-        version_id = prior_version + 1
-    else:
-        version_id = 1
+    version_id = 1
 
     return {
         "_ncp": 1,
@@ -72,10 +76,8 @@ def _emit(inp: dict) -> dict:
         "version_id": version_id,
         "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "created_by": CREATED_BY,
-        "prior_version": (prior_version if isinstance(prior_version, int)
-                          else prior_version.get('version_id') if isinstance(prior_version, dict)
-                          else None),
-        "pushback_reason": str(pushback) if pushback is not None else None,
+        "prior_version": None,
+        "pushback_reason": None,
         "dag": {
             "nodes": [
                 {
@@ -129,21 +131,46 @@ def _self_test() -> None:
     assert out["type"] == "task_list"
     assert out["schema_version"] == 1
 
-    # pushback path
+    # pushback path — trivial decomposer must refuse, not re-emit
+    import io
+    import contextlib
+    import subprocess
     fixture2 = dict(fixture, prior_version=1, pushback="scope_insufficient")
-    out2 = _emit(fixture2)
-    assert out2["version_id"] == 2, "version_id should bump on pushback"
-    assert out2["prior_version"] == 1
-    assert out2["pushback_reason"] == "scope_insufficient"
+    stderr_buf = io.StringIO()
+    pushback_exit = None
+    try:
+        with contextlib.redirect_stderr(stderr_buf):
+            _emit(fixture2)
+        pushback_exit = 0  # should not reach here
+    except SystemExit as exc:
+        pushback_exit = exc.code
+    assert pushback_exit == 2, f"pushback path should exit 2, got {pushback_exit}"
+    stderr_text = stderr_buf.getvalue()
+    assert "trivial-decomposer: cannot respond to pushback" in stderr_text, (
+        f"expected refusal message in stderr, got: {stderr_text!r}"
+    )
+    assert "pushback_unsupported" not in stderr_text  # reason emitted by cmd_decompose, not here
+
+    # prior_version-only path (no pushback text) also refuses
+    fixture3_pv = dict(fixture, prior_version={"version_id": 1}, pushback=None)
+    stderr_buf2 = io.StringIO()
+    pv_exit = None
+    try:
+        with contextlib.redirect_stderr(stderr_buf2):
+            _emit(fixture3_pv)
+        pv_exit = 0
+    except SystemExit as exc:
+        pv_exit = exc.code
+    assert pv_exit == 2, f"prior_version-only path should exit 2, got {pv_exit}"
 
     # long title truncation
-    fixture3 = dict(fixture)
-    fixture3["plan"] = fixture["plan"].replace(
+    fixture_long = dict(fixture)
+    fixture_long["plan"] = fixture["plan"].replace(
         "Refactor the login handler",
         "A" * 60,
     )
-    out3 = _emit(fixture3)
-    assert len(out3["dag"]["nodes"][0]["action"]) <= 50, "action should be ≤50 chars"
+    out_long = _emit(fixture_long)
+    assert len(out_long["dag"]["nodes"][0]["action"]) <= 50, "action should be ≤50 chars"
 
     print("self-test: PASS")
 

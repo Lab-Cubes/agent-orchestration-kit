@@ -7,7 +7,7 @@
 #   - Error paths: bad stdin JSON, missing plan_id, non-zero decomposer exit
 #   - Schema-violation output: schema_violation escalation event
 #   - DAG validation: NOP-TASK-DAG-TOO-LARGE and NOP-TASK-DAG-CYCLE
-#   - Pushback path: prior_version=1 → v2.json, invoked_decomposer event
+#   - Pushback path: prior_version=1 → trivial decomposer refuses (exit 2), decomposer_failed/pushback_unsupported event
 #   - Config override: custom decomposer_cmd honoured from config.json
 #
 # Schema validation (cmd_decompose always runs it) requires the jsonschema
@@ -382,27 +382,26 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 11 — Pushback path (prior_version=1 → v2.json)
+# 11 — Pushback path: trivial decomposer refuses re-emission, escalates
 # ---------------------------------------------------------------------------
 
-@test "pushback path: prior_version=1 yields v2.json, invoked_decomposer with version 2" {
-    _require_jsonschema
+@test "pushback path: prior_version=1 causes trivial decomposer refusal, decomposer_failed/pushback_unsupported event" {
     local fixture
     fixture=$(_write_fixture "$PLAN_ID" 1)
 
     run run_decompose_from "$fixture"
 
-    [ "$status" -eq 0 ]
-    [ -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v2.json" ]
-    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+    # cmd_decompose must exit non-zero; no pending file written
+    [ "$status" -ne 0 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v2.json" ]
 
     local ev
     ev=$(_last_event)
     run python3 - "$ev" <<'PYEOF'
 import json, sys
 ev = json.loads(sys.argv[1])
-assert ev["dispatcher_acted"] == "invoked_decomposer", ev
-assert ev["decomposer_output_version"] == 2, ev
+assert ev["dispatcher_acted"] == "decomposer_failed", f"dispatcher_acted={ev['dispatcher_acted']!r}"
+assert ev["pushback_reason"] == "pushback_unsupported", f"pushback_reason={ev['pushback_reason']!r}"
 print("ok")
 PYEOF
     [ "$status" -eq 0 ]
