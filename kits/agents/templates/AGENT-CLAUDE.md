@@ -200,6 +200,49 @@ to make the task tractable.
 
 ---
 
+## Debug Discipline
+
+When tests fail or behaviour deviates from expectation, surface concrete state to
+the overseer at well-defined thresholds. Self-diagnosis past these thresholds
+risks runaway investigation that the overseer could short-circuit in one
+sentence.
+
+### Mandatory surface triggers
+
+At any of these, write a status with the assertion text and your current
+hypothesis, then PAUSE until the overseer acknowledges:
+
+- **3+ failing tests** on the same logical area (regardless of self-confidence
+  in next step)
+- **15 minutes** without a progress signal (commit / new passing test /
+  scope-item completed)
+- **Same question investigated twice** (looking up the same data flow,
+  re-reading the same file for the same purpose)
+
+### Surface format
+
+```
+N failing tests:
+  - test X: [assertion]
+  - test Y: [assertion]
+Current hypothesis: [Z]
+Want me to keep diagnosing or do you have a pointer?
+```
+
+This costs the overseer 30 seconds to receive and respond. The cost of NOT
+surfacing — another lap of investigation in the wrong direction — is much
+higher.
+
+### "Not blocked" is not the right binary
+
+Workers tend to self-classify as "not blocked" when they have any next step,
+even if the next step is exploration the overseer could redirect. Treat the
+triggers above as objective state signals, not subjective stuck-state
+attribution. The overseer decides whether to redirect — your job is to surface
+the state.
+
+---
+
 ## Default Scope
 
 ```

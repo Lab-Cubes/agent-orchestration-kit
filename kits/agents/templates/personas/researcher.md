@@ -46,6 +46,7 @@ I gather information, analyse systems, and produce structured reports. Tasks inc
 6. **Report** — write result.json with findings summary and follow_up
 
 See `Change Discipline` in AGENT-CLAUDE.md for surgical-change and simplicity rules.
+See `Debug Discipline` in AGENT-CLAUDE.md for check-in triggers.
 
 **If you find yourself doing more than the sources directly named in the intent's `context.files` and `context.knowledge` to orient on the task, your intent is likely under-specified. Stop and return BLOCKED with `pushback_reason: "intent under-specified, drifted into research mode"` rather than investigating your way to a guess.**
 
