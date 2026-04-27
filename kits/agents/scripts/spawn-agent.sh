@@ -1174,6 +1174,13 @@ PYEOF
         exit 1
     fi
 
+    # --- Pushback-refusal path (exit 2 = decomposer cannot handle pushback) ---
+    if [[ "$decomposer_exit" -eq 2 ]]; then
+        err "cmd_decompose: Decomposer refused pushback (exit 2); escalating to OSer"
+        _append_decompose_event "decomposer_failed" "pushback_unsupported" "null"
+        exit 1
+    fi
+
     # --- Non-zero exit path ---
     if [[ "$decomposer_exit" -ne 0 ]]; then
         err "cmd_decompose: Decomposer exited with non-zero code: $decomposer_exit"

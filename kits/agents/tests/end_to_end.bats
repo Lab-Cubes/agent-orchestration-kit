@@ -272,10 +272,11 @@ print('ok')
 }
 
 # ---------------------------------------------------------------------------
-# 8. Pushback: escalation event has invoked_decomposer + correct reason
+# 8. Pushback: escalation event is decomposer_failed/pushback_unsupported
+#    (trivial decomposer refuses re-emission; escalates to OSer)
 # ---------------------------------------------------------------------------
 
-@test "pushback: escalation.jsonl has invoked_decomposer event with pushback_reason" {
+@test "pushback: escalation.jsonl has decomposer_failed/pushback_unsupported event" {
     _seed_plan "plan-e2e-008"
     _run_e2e decompose <<< "$(_decompose_input plan-e2e-008)" > /dev/null
     _run_e2e ack plan-e2e-008 1 > /dev/null
@@ -284,32 +285,23 @@ print('ok')
     run python3 - "$NPS_TASKLISTS_HOME/plan-e2e-008/escalation.jsonl" <<'PYEOF'
 import json, sys
 events = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
-pb_events = [e for e in events if e.get('dispatcher_acted') == 'invoked_decomposer']
-assert pb_events, f"no invoked_decomposer event in {events}"
-assert any(e.get('pushback_reason') == 'scope_insufficient' for e in pb_events), \
-    f"no invoked_decomposer event with pushback_reason=scope_insufficient in {pb_events}"
+pb_events = [e for e in events if e.get('dispatcher_acted') == 'decomposer_failed'
+             and e.get('pushback_reason') == 'pushback_unsupported']
+assert pb_events, f"no decomposer_failed/pushback_unsupported event in {events}"
 print('ok')
 PYEOF
     [ "$status" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
-# 9. Pushback: pending/v2.json created by Decomposer re-invocation
+# 9. Pushback: trivial decomposer refusal means no pending/v2.json written
 # ---------------------------------------------------------------------------
 
-@test "pushback: pending/v2.json written by Decomposer re-invocation" {
+@test "pushback: no pending/v2.json when trivial decomposer refuses re-invocation" {
     _seed_plan "plan-e2e-009"
     _run_e2e decompose <<< "$(_decompose_input plan-e2e-009)" > /dev/null
     _run_e2e ack plan-e2e-009 1 > /dev/null
     MOCK_CLAUDE_MODE=pushback run_dt plan-e2e-009 > /dev/null || true
 
-    [ -f "$NPS_TASKLISTS_HOME/plan-e2e-009/pending/v2.json" ]
-    run python3 -c "
-import json
-d = json.load(open('$NPS_TASKLISTS_HOME/plan-e2e-009/pending/v2.json'))
-assert d['version_id'] == 2, d['version_id']
-assert d['plan_id'] == 'plan-e2e-009', d['plan_id']
-print('ok')
-"
-    [ "$status" -eq 0 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/plan-e2e-009/pending/v2.json" ]
 }
