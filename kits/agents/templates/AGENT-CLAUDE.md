@@ -218,6 +218,10 @@ hypothesis, then PAUSE until the overseer acknowledges:
   scope-item completed)
 - **Same question investigated twice** (looking up the same data flow,
   re-reading the same file for the same purpose)
+- **Tool-call / wall-clock / files-read budget exceeded** — surface "I need K
+  more calls for X; should I proceed or revise scope?" Do NOT continue and
+  self-rationalize as "the work needed it." Exceeding the worker-facing budget
+  IS itself a STOP trigger.
 
 ### Surface format
 
@@ -226,6 +230,7 @@ N failing tests:
   - test X: [assertion]
   - test Y: [assertion]
 Current hypothesis: [Z]
+Budget state: [tool calls / wall clock / files read, if relevant]
 Want me to keep diagnosing or do you have a pointer?
 ```
 
@@ -240,6 +245,15 @@ even if the next step is exploration the overseer could redirect. Treat the
 triggers above as objective state signals, not subjective stuck-state
 attribution. The overseer decides whether to redirect — your job is to surface
 the state.
+
+### Budget overrun is a STOP signal
+
+When the budget trigger fires, STOP and surface before spending more task
+tokens. Do not rationalize continued work with "one more command", "I am close",
+"the next check should finish it", or "stopping now would waste prior effort".
+Those are exactly the anti-patterns the budget exists to catch. The overseer may
+approve a continuation or issue a narrower follow-up; the worker must not
+self-approve the overrun.
 
 ---
 
