@@ -133,6 +133,30 @@ Intentionally minimal — types only + test utilities. No production business lo
 | `nop-agent.ts` | No-op test agent — used by BATS tests via mock Claude CLI |
 | `schemas/*.schema.json` | JSON Schema documents for the phased-dispatch artifacts |
 
+### Shell layer (`kits/agents/scripts/`)
+
+Modular post-#103 split. `spawn-agent.sh` is a thin dispatcher (97 lines) that sources `lib/` modules and routes by subcommand; `lib/cmd_*.sh` carries one `cmd_*` function each, `lib/helpers/*.sh` carries genuinely-shared helpers.
+
+| File | Purpose |
+|---|---|
+| `spawn-agent.sh` | Dispatcher — arg parse, source `lib/`, route subcommand to `cmd_*` |
+| `lib/cmd_setup.sh` | `cmd_setup` — create worker dir + bootstrap `CLAUDE.md` from templates |
+| `lib/cmd_dispatch.sh` | `cmd_dispatch` — build intent, spawn worker subprocess, capture result + NPT cost |
+| `lib/cmd_dispatch_tasklist.sh` | `cmd_dispatch_tasklist` — DAG walk, spawn-per-node, state tracking, supersede on re-decompose |
+| `lib/cmd_decompose.sh` | `cmd_decompose` — invoke Decomposer (`config.json::decomposer_cmd`), validate output, write `pending/v{N}.json` |
+| `lib/cmd_ack.sh` | `cmd_ack` — promote `pending/v{N}.json` → `v{N}.json`, write `osi_acked` event |
+| `lib/cmd_merge.sh` | `cmd_merge` — squash-merge worker branch (merge-hold gated, archived-branch cherry-pick guidance) |
+| `lib/cmd_status.sh` | `cmd_status` — show mailbox state + latest result |
+| `lib/cmd_clean.sh` | `cmd_clean` — remove stale worker artifacts |
+| `lib/cmd_supersede_gc.sh` | `cmd_supersede_gc` — clean up superseded worktrees by age or plan |
+| `lib/helpers/env.sh` | Runtime config loading + defaults; `log` / `warn` / `err` |
+| `lib/helpers/hooks.sh` | `run_hook` — language-agnostic hook executor |
+| `lib/decomposers/trivial.py` | Bundled Decomposer fallback (one task per plan, first-emission only per #115) |
+| `lib/validate_schema.py` | JSON Schema validator (draft-2020-12) for phased-dispatch artifacts |
+| `lib/validate_tasklist_semantics.py` | Semantic validator (#118 — task-list identity, references) |
+| `lib/calc_npt.py` | NPT formula + `detect_family()` model-family inference |
+| `lib/adapters/` | Runtime adapters (`claude`, `kiro`) per #57 |
+
 ### Worker disciplines (post-#69 + #101 + #108/#112/#113/#114/#107 + #115)
 
 Workers inherit [`templates/AGENT-CLAUDE.md`](kits/agents/templates/AGENT-CLAUDE.md) plus a per-role persona overlay. The disciplines tighten what workers will do under runtime pressure:
