@@ -508,7 +508,7 @@ Layer replacement (e.g., changing the Dispatcher from one-shot to long-running d
 
 - [`implementation-spec.md`](implementation-spec.md) — wire-format runbook (message shapes, state transitions, hook system)
 - [`NPT.md`](NPT.md) — NPT token accounting details
-- [NPS-Release/spec/protocols/](https://github.com/labacacia/NPS-Release/tree/main/spec/protocols) — canonical NPS spec
+- [NPS-Release/spec/](https://github.com/labacacia/NPS-Release/tree/main/spec) — canonical NPS spec
 
 ---
 
@@ -522,3 +522,4 @@ Layer replacement (e.g., changing the Dispatcher from one-shot to long-running d
 | 0.2.3-draft | 2026-04-24 | §4.6 added: four JSON Schema documents under `src/schemas/`, Python validator at `scripts/lib/validate_schema.py`, forward-reference to `cmd_decompose` validation hook (#66). Closes #62. |
 | 0.2.4-draft | 2026-04-25 | `osi_ack_by` added to EscalationEvent TS type + schema (closes #80). Required field; emitted by cmd_ack (#67). |
 | 0.2.5-draft | 2026-04-27 | §5.4 trivial decomposer is first-emission only; exit 2 on pushback context; `cmd_decompose` catches as `decomposer_failed`/`pushback_unsupported` escalation (closes #115). |
+| 0.2.6-draft | 2026-04-30 | §9 fixed stale `spec/protocols/` link post-NPS-Release alpha.3 flatten (closes #158). |
