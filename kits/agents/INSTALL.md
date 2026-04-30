@@ -1,4 +1,4 @@
-# AGENTS.md — Install Spec for Agent Readers
+# INSTALL.md — Install Spec for Agent Readers
 
 This document is the install runbook for AI agents scanning the repo on behalf
 of a non-technical operator. Every step is exact. No prose.
@@ -52,10 +52,10 @@ Expected: three directories — `coder-01`, `critic-01`, `researcher-01`.
 Expected output contains: `=== Worker: coder-01 ===` followed by `inbox:`,
 `active:`, `done:`, `blocked:` sections (all empty on a fresh install).
 
-## Run the token-savings demo
+## Run the token-savings benchmark
 
 ```bash
-./bin/demo
+./bin/benchmark
 ```
 
 Expected behaviour:
@@ -106,7 +106,7 @@ Edit these files only if the operator requests changes:
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
 | `./bin/setup` says "claude: command not found" | Claude Code CLI not installed | Point operator to install docs |
-| `./bin/demo` hangs past 3 minutes | Claude API overloaded or network issue | Interrupt (Ctrl-C), retry after 2 min |
+| `./bin/benchmark` hangs past 3 minutes | Claude API overloaded or network issue | Interrupt (Ctrl-C), retry after 2 min |
 | `spawn-agent.sh dispatch` fails with "Worker not set up" | Setup never ran | Run `./bin/setup` |
 | `result.json` never appears in `done/` | Worker hit budget limit or error | Check `done/*.raw-output.json` for the last Claude response |
 | Hook script error (`[nps] hook ... exited non-zero`) | Broken hook in `hooks/` | Delete or fix the hook — never blocks the worker |
