@@ -8,13 +8,40 @@ fi
 
 MODE="${MOCK_CLAUDE_MODE:-happy}"
 
+_load_task_context() {
+    local prompt_text=""
+    for arg in "$@"; do
+        prompt_text="$arg"
+    done
+    TASK_ID=$(echo "$prompt_text" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1 || true)
+    local inbox_dir=""
+    inbox_dir=$(printf '%s\n' "$prompt_text" | sed -n 's|.*ls \([^ ]*/inbox/\).*|\1|p' | head -1)
+    if [[ -n "$inbox_dir" ]]; then
+        MAILBOX_BASE="${inbox_dir%/inbox/}"
+    else
+        MAILBOX_BASE="."
+    fi
+}
+
+_claim_task() {
+    _load_task_context "$@"
+    [[ -n "${TASK_ID:-}" ]] || return 0
+    mkdir -p "$MAILBOX_BASE/active" "$MAILBOX_BASE/done"
+    if [[ -f "$MAILBOX_BASE/inbox/${TASK_ID}.intent.json" ]]; then
+        mv "$MAILBOX_BASE/inbox/${TASK_ID}.intent.json" "$MAILBOX_BASE/active/${TASK_ID}.intent.json"
+        mv "$MAILBOX_BASE/active/${TASK_ID}.intent.json" "$MAILBOX_BASE/done/${TASK_ID}.intent.json"
+    fi
+}
+
 case "$MODE" in
     happy)
+        _claim_task "$@"
         echo "Mock Kiro worker completed task successfully."
         echo "Created models.py, db.py, cli.py"
         exit 0
         ;;
     error)
+        _claim_task "$@"
         echo "Mock Kiro error occurred." >&2
         exit 1
         ;;

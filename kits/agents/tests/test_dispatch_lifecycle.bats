@@ -54,6 +54,22 @@ teardown() {
     local rows
     rows=$(wc -l < "$KIT_LOGS/dispatch-costs.csv" | tr -d ' ')
     [ "$rows" -eq 2 ]
+
+    local task_id
+    task_id=$(echo "$output" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1)
+    [ -n "$task_id" ]
+    [ ! -f "$KIT_AGENTS/coder-01/inbox/${task_id}.intent.json" ]
+    [ ! -f "$KIT_AGENTS/coder-01/done/${task_id}.unclaimed.intent.json" ]
+
+    local result_file="$KIT_AGENTS/coder-01/done/${task_id}.result.json"
+    [ -f "$result_file" ]
+    run python3 - "$result_file" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["payload"]["status"] == "completed", d["payload"]["status"]
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -127,6 +143,70 @@ teardown() {
     local status_field
     status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
     [ -n "$status_field" ]
+}
+
+@test "#177 no-lifecycle: unclaimed intent fails loudly without result, CSV row, or terminal hook" {
+    export MOCK_CLAUDE_MODE=no_claim
+
+    cat > "$KIT_HOOKS/on-task-completed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/completed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-completed.sh"
+    cat > "$KIT_HOOKS/on-task-failed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/failed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-failed.sh"
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "no lifecycle test" --category code --time-limit 60
+
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "KIT-DISPATCH-NO-LIFECYCLE"
+
+    local task_id
+    task_id=$(echo "$output" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1)
+    [ -n "$task_id" ]
+    [ ! -f "$KIT_AGENTS/coder-01/inbox/${task_id}.intent.json" ]
+    [ -f "$KIT_AGENTS/coder-01/done/${task_id}.unclaimed.intent.json" ]
+    [ ! -f "$KIT_AGENTS/coder-01/done/${task_id}.result.json" ]
+
+    if [[ -f "$KIT_LOGS/dispatch-costs.csv" ]]; then
+        ! grep -q "$task_id" "$KIT_LOGS/dispatch-costs.csv"
+    fi
+    [ ! -f "$KIT_TMPDIR/completed-hook-fired" ]
+    [ ! -f "$KIT_TMPDIR/failed-hook-fired" ]
+}
+
+@test "#177 mid-task failure: claimed intent without result still uses fallback synthesis" {
+    export MOCK_CLAUDE_MODE=claim_no_result
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "claimed without result test" --category code --time-limit 60
+
+    [ "$status" -eq 0 ]
+
+    local task_id
+    task_id=$(echo "$output" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1)
+    [ -n "$task_id" ]
+    [ -f "$KIT_AGENTS/coder-01/done/${task_id}.intent.json" ]
+    [ ! -f "$KIT_AGENTS/coder-01/done/${task_id}.unclaimed.intent.json" ]
+
+    local result_file="$KIT_AGENTS/coder-01/done/${task_id}.result.json"
+    [ -f "$result_file" ]
+    run python3 - "$result_file" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+p = d["payload"]
+assert p["status"] == "failed", p["status"]
+assert p.get("_fallback") is True
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+
+    [ -f "$KIT_LOGS/dispatch-costs.csv" ]
+    grep -q "$task_id" "$KIT_LOGS/dispatch-costs.csv"
 }
 
 # ---------------------------------------------------------------------------

@@ -468,6 +468,7 @@ Use this checklist to verify a new runtime port implements the protocol correctl
 
 ### Error cases
 
+- [ ] No worker lifecycle happened (intent still in `inbox/` after runtime exit) → dispatcher returns `KIT-DISPATCH-NO-LIFECYCLE`, archives the intent as `done/{id}.unclaimed.intent.json`, and does not synthesize a worker result.
 - [ ] Unparseable intent → write `failed` result with `NOP-TASK-PARSE-FAILED` in error field.
 - [ ] Scope file missing → write `failed` result with `NOP-TASK-SCOPE-MISSING`.
 - [ ] Time limit exceeded → write `timeout` result with `NOP-TASK-TIMEOUT`.

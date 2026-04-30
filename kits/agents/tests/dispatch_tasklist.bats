@@ -263,7 +263,61 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 7. Concurrent flock reject: second invocation exits 1
+# 7. Kit no-lifecycle failure: no retry, escalation preserves kit code
+# ---------------------------------------------------------------------------
+
+@test "#177 no-lifecycle kit error: node fails without retry and escalation names code" {
+    local tl_dir="$NPS_TASKLISTS_HOME/plan-no-lifecycle"
+    mkdir -p "$tl_dir"
+    python3 - "$FIXTURES_DIR/single-task.json" "$tl_dir/v1.json" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+d["plan_id"] = "plan-no-lifecycle"
+d["dag"]["nodes"][0]["retry_policy"]["max_retries"] = 1
+with open(sys.argv[2], "w") as f:
+    json.dump(d, f, indent=2)
+    f.write("\n")
+PYEOF
+
+    export MOCK_CLAUDE_MODE=no_claim
+    run run_dt plan-no-lifecycle
+    unset MOCK_CLAUDE_MODE
+
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "KIT-DISPATCH-NO-LIFECYCLE"
+
+    run python3 - "$NPS_TASKLISTS_HOME/plan-no-lifecycle/task-list-state.json" "$KIT_AGENTS" <<'PYEOF'
+import json, os, sys
+state_file, agents_home = sys.argv[1:]
+s = json.load(open(state_file))
+node = s["node_states"]["node-a"]
+assert node["status"] == "failed", node
+assert node.get("retries", 0) == 0, node
+assert node["task_id"], node
+assert node.get("result_path") is None, node
+tid = node["task_id"]
+assert os.path.isfile(os.path.join(agents_home, "coder-01", "done", f"{tid}.unclaimed.intent.json")), tid
+assert not os.path.exists(os.path.join(agents_home, "coder-01", "done", f"{tid}.result.json")), tid
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+
+    run python3 - "$NPS_TASKLISTS_HOME/plan-no-lifecycle/escalation.jsonl" <<'PYEOF'
+import json, sys
+events = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+matches = [
+    e for e in events
+    if e.get("dispatcher_acted") == "escalated_to_oser"
+    and e.get("pushback_reason") == "KIT-DISPATCH-NO-LIFECYCLE"
+]
+assert matches, events
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 8. Concurrent flock reject: second invocation exits 1
 # ---------------------------------------------------------------------------
 
 @test "concurrent flock: second dispatch-tasklist exits 1 while first holds lock" {

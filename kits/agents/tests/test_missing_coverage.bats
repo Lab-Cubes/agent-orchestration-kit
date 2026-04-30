@@ -136,7 +136,7 @@ _init_repo() {
 # ---------------------------------------------------------------------------
 
 @test "#40 result.json: fallback has all required NOP fields" {
-    export MOCK_CLAUDE_MODE=happy
+    export MOCK_CLAUDE_MODE=claim_no_result
 
     run_spawner setup coder-01 coder
     run_spawner dispatch coder-01 "schema check" --category code --time-limit 60
