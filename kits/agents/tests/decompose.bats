@@ -83,7 +83,7 @@ PYEOF
 }
 
 # Write a schema-valid TaskListMessage JSON to the given output path.
-# Args: output_path node_count [add_cycle=false] [plan_id] [version_id] [prior_version_or_null]
+# Args: output_path node_count [add_cycle=false] [plan_id] [version_id] [prior_version_or_null] [semantic_variant]
 _write_mock_task_list() {
     local out_path="$1"
     local node_count="${2:-1}"
@@ -91,7 +91,8 @@ _write_mock_task_list() {
     local plan_id="${4:-$PLAN_ID}"
     local version_id="${5:-1}"
     local prior_version="${6:-null}"
-    python3 - "$out_path" "$node_count" "$add_cycle" "$plan_id" "$version_id" "$prior_version" <<'PYEOF'
+    local semantic_variant="${7:-}"
+    python3 - "$out_path" "$node_count" "$add_cycle" "$plan_id" "$version_id" "$prior_version" "$semantic_variant" <<'PYEOF'
 import json, sys
 out_path = sys.argv[1]
 node_count = int(sys.argv[2])
@@ -99,6 +100,7 @@ add_cycle = sys.argv[3] == 'true'
 plan_id = sys.argv[4]
 version_id = int(sys.argv[5])
 prior_version = None if sys.argv[6] == 'null' else int(sys.argv[6])
+semantic_variant = sys.argv[7]
 
 def node(i):
     return {
@@ -113,6 +115,13 @@ def node(i):
 nodes = [node(i) for i in range(node_count)]
 edges = ([{"from": "node-0", "to": "node-1"}, {"from": "node-1", "to": "node-0"}]
          if add_cycle and node_count >= 2 else [])
+
+if semantic_variant == "duplicate_node_id" and len(nodes) >= 2:
+    nodes[1]["id"] = nodes[0]["id"]
+elif semantic_variant == "edge_phantom":
+    edges.append({"from": "node-0", "to": "node-missing"})
+elif semantic_variant == "input_from_phantom" and nodes:
+    nodes[0]["input_from"] = ["node-missing"]
 
 json.dump({
     "_ncp": 1, "type": "task_list", "schema_version": 1,
@@ -169,6 +178,9 @@ _require_jsonschema() {
     echo "$output" | grep -q "KIT-DECOMP-PLAN-MISMATCH"
     echo "$output" | grep -q "KIT-DECOMP-VERSION-MISMATCH"
     echo "$output" | grep -q "KIT-DECOMP-PRIOR-VERSION-MISMATCH"
+    echo "$output" | grep -q "KIT-DECOMP-NODE-ID-DUPLICATE"
+    echo "$output" | grep -q "KIT-DECOMP-EDGE-PHANTOM"
+    echo "$output" | grep -q "KIT-DECOMP-INPUT-FROM-PHANTOM"
 }
 
 # ---------------------------------------------------------------------------
@@ -465,7 +477,115 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 13 — DAG-cycle (node-0 → node-1 → node-0)
+# 13 — Semantic validation: duplicate node id
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: duplicate node id exits 1 with KIT-DECOMP-NODE-ID-DUPLICATE" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/duplicate-node-id.json"
+    _write_mock_task_list "$semantic_file" 2 false "$PLAN_ID" 1 null duplicate_node_id
+
+    cat > "$KIT_TMPDIR/duplicate-node-id.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/duplicate-node-id.py"
+    _override_decomposer "python3 $KIT_TMPDIR/duplicate-node-id.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-NODE-ID-DUPLICATE", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 14 — Semantic validation: edge references missing node id
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: phantom edge exits 1 with KIT-DECOMP-EDGE-PHANTOM" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/edge-phantom.json"
+    _write_mock_task_list "$semantic_file" 1 false "$PLAN_ID" 1 null edge_phantom
+
+    cat > "$KIT_TMPDIR/edge-phantom.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/edge-phantom.py"
+    _override_decomposer "python3 $KIT_TMPDIR/edge-phantom.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-EDGE-PHANTOM", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 15 — Semantic validation: input_from references missing node id
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: phantom input_from exits 1 with KIT-DECOMP-INPUT-FROM-PHANTOM" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/input-from-phantom.json"
+    _write_mock_task_list "$semantic_file" 1 false "$PLAN_ID" 1 null input_from_phantom
+
+    cat > "$KIT_TMPDIR/input-from-phantom.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/input-from-phantom.py"
+    _override_decomposer "python3 $KIT_TMPDIR/input-from-phantom.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-INPUT-FROM-PHANTOM", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 16 — DAG-cycle (node-0 → node-1 → node-0)
 # ---------------------------------------------------------------------------
 
 @test "DAG-cycle: exits 1, decomposer_failed/NOP-TASK-DAG-CYCLE event" {
@@ -501,7 +621,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 14 — Pushback path: trivial decomposer refuses re-emission, escalates
+# 17 — Pushback path: trivial decomposer refuses re-emission, escalates
 # ---------------------------------------------------------------------------
 
 @test "pushback path: prior_version=1 causes trivial decomposer refusal, decomposer_failed/pushback_unsupported event" {
@@ -527,7 +647,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 15 — Config override: custom decomposer_cmd used
+# 18 — Config override: custom decomposer_cmd used
 # ---------------------------------------------------------------------------
 
 @test "config override: custom decomposer_cmd in config.json is used" {

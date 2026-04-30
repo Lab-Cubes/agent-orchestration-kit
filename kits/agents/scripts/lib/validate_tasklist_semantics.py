@@ -20,6 +20,9 @@ import tempfile
 PLAN_MISMATCH = "KIT-DECOMP-PLAN-MISMATCH"
 VERSION_MISMATCH = "KIT-DECOMP-VERSION-MISMATCH"
 PRIOR_VERSION_MISMATCH = "KIT-DECOMP-PRIOR-VERSION-MISMATCH"
+NODE_ID_DUPLICATE = "KIT-DECOMP-NODE-ID-DUPLICATE"
+EDGE_PHANTOM = "KIT-DECOMP-EDGE-PHANTOM"
+INPUT_FROM_PHANTOM = "KIT-DECOMP-INPUT-FROM-PHANTOM"
 
 
 def _load_json(path: str) -> dict:
@@ -85,6 +88,48 @@ def validate(data: dict, input_plan_id: str, prior_version_id: int) -> list[tupl
             f"task-list prior_version {tasklist_prior!r} != expected {prior_version_id}",
         ))
 
+    dag = data.get("dag", {})
+    nodes = dag.get("nodes", [])
+    edges = dag.get("edges", [])
+
+    seen_node_ids: set[str] = set()
+    duplicate_node_ids: set[str] = set()
+    for node in nodes:
+        node_id = node.get("id")
+        if node_id in seen_node_ids:
+            duplicate_node_ids.add(node_id)
+        else:
+            seen_node_ids.add(node_id)
+
+    for node_id in sorted(duplicate_node_ids):
+        errors.append((
+            NODE_ID_DUPLICATE,
+            f"dag.nodes[].id {node_id!r} appears more than once",
+        ))
+
+    for edge in edges:
+        src = edge.get("from")
+        dst = edge.get("to")
+        if src not in seen_node_ids:
+            errors.append((
+                EDGE_PHANTOM,
+                f"dag.edges[].from {src!r} references missing node id",
+            ))
+        if dst not in seen_node_ids:
+            errors.append((
+                EDGE_PHANTOM,
+                f"dag.edges[].to {dst!r} references missing node id",
+            ))
+
+    for node in nodes:
+        node_id = node.get("id")
+        for upstream_id in node.get("input_from", []):
+            if upstream_id not in seen_node_ids:
+                errors.append((
+                    INPUT_FROM_PHANTOM,
+                    f"node {node_id!r} input_from {upstream_id!r} references missing node id",
+                ))
+
     return errors
 
 
@@ -105,6 +150,22 @@ def _sample_tasklist(**overrides) -> dict:
     return data
 
 
+def _sample_node(node_id: str, input_from: list[str] | None = None) -> dict:
+    return {
+        "id": node_id,
+        "action": "act",
+        "agent": "urn:nps:agent:test.localhost:coder-01",
+        "input_from": input_from or [],
+        "input_mapping": {},
+        "scope": ["."],
+        "budget_npt": 1000,
+        "timeout_ms": 60000,
+        "retry_policy": {"max_retries": 0, "backoff_ms": 0},
+        "condition": None,
+        "success_criteria": {},
+    }
+
+
 def _self_test() -> None:
     assert validate(_sample_tasklist(), "plan-test-20260425-120000", 0) == []
 
@@ -120,6 +181,32 @@ def _self_test() -> None:
         1,
     )
     assert prior_errors[0][0] == PRIOR_VERSION_MISMATCH, prior_errors
+
+    duplicate_errors = validate(
+        _sample_tasklist(dag={"nodes": [_sample_node("node-1"), _sample_node("node-1")], "edges": []}),
+        "plan-test-20260425-120000",
+        0,
+    )
+    assert duplicate_errors[0][0] == NODE_ID_DUPLICATE, duplicate_errors
+
+    edge_errors = validate(
+        _sample_tasklist(
+            dag={
+                "nodes": [_sample_node("node-1")],
+                "edges": [{"from": "node-1", "to": "node-missing"}],
+            },
+        ),
+        "plan-test-20260425-120000",
+        0,
+    )
+    assert edge_errors[0][0] == EDGE_PHANTOM, edge_errors
+
+    input_from_errors = validate(
+        _sample_tasklist(dag={"nodes": [_sample_node("node-1", ["node-missing"])], "edges": []}),
+        "plan-test-20260425-120000",
+        0,
+    )
+    assert input_from_errors[0][0] == INPUT_FROM_PHANTOM, input_from_errors
 
     with tempfile.NamedTemporaryFile("w", encoding="utf-8") as fh:
         json.dump(_sample_tasklist(), fh)

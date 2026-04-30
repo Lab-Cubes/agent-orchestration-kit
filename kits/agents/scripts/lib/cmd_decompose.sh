@@ -42,6 +42,12 @@ Semantic validation (kit invariants, enforced before DAG validation):
       → violation: KIT-DECOMP-VERSION-MISMATCH
   - Re-decompose task-list prior_version == input prior_version_id
       → violation: KIT-DECOMP-PRIOR-VERSION-MISMATCH
+  - dag.nodes[].id values are unique
+      → violation: KIT-DECOMP-NODE-ID-DUPLICATE
+  - dag.edges[].from and dag.edges[].to reference existing node ids
+      → violation: KIT-DECOMP-EDGE-PHANTOM
+  - dag.nodes[].input_from entries reference existing node ids
+      → violation: KIT-DECOMP-INPUT-FROM-PHANTOM
 
 Artifacts:
   task-lists/{plan-id}/pending/v{N}.json  — awaiting OSer ack (cmd_ack)
