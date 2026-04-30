@@ -14,7 +14,7 @@ Protocol SDKs (NPS-sdk-*) live at [labacacia/NPS-sdk-*](https://github.com/labac
 git clone https://github.com/Lab-Cubes/agent-orchestration-kit.git
 cd agent-orchestration-kit/kits/agents
 ./bin/setup
-./bin/demo
+./bin/benchmark
 ```
 
 ## Making changes
@@ -77,4 +77,3 @@ The default merge strategy is **rebase-and-merge** — keep the history clean.
 2. CODEOWNERS are auto-assigned
 3. Address review feedback with new commits (don't force-push during review)
 4. Maintainer rebases and merges
-

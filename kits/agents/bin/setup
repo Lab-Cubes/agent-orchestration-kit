@@ -4,7 +4,7 @@
 # Bootstraps a fresh clone for immediate use: copies example configs if
 # absent, creates runtime directories, sets up three default workers
 # (coder-01, critic-01, researcher-01), installs an identity mark so
-# the demo knows the install is complete.
+# the benchmark knows the install is complete.
 #
 # Safe to re-run. Won't overwrite existing configs or workers.
 
@@ -74,6 +74,6 @@ echo ""
 say "Setup complete."
 echo ""
 echo "Next steps:"
-echo "  ./bin/demo                                  # Run the token-savings demo"
+echo "  ./bin/benchmark                             # Run the token-savings benchmark"
 echo "  ./scripts/spawn-agent.sh status coder-01    # Inspect a worker"
 echo "  edit config.json                            # Customize for your org"

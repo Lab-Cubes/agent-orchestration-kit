@@ -75,7 +75,7 @@ Initial public release.
   duration_s, denials, status)
 - Discord plugin (`plugins/discord`)
 - Cost-monitor plugin (`plugins/cost-monitor`)
-- `bin/demo` — live NPT comparison (naive prompt vs NOP dispatch)
+- `bin/benchmark` — live NPT comparison (naive prompt vs NOP dispatch)
 - Tested across 40+ real tasks before release
 
 ### Known approximations

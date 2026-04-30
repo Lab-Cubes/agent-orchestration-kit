@@ -10,7 +10,7 @@
   },
   "scripts": {
     "setup": "./bin/setup",
-    "demo": "./bin/demo",
+    "benchmark": "./bin/benchmark",
     "typecheck": "tsc --noEmit"
   },
   "engines": {

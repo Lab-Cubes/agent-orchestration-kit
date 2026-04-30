@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/demo — Token-savings demonstration.
+# bin/benchmark — NPT benchmark for naive vs NOP token usage.
 #
 # Runs a canonical research task two ways:
 #   1. Naive path — orchestrator sends full context to Claude as prompt tokens
@@ -20,9 +20,9 @@ GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
-say()   { echo -e "${GREEN}[demo]${NC} $*"; }
+say()   { echo -e "${GREEN}[benchmark]${NC} $*"; }
 hi()    { echo -e "${CYAN}$*${NC}"; }
-warn()  { echo -e "${YELLOW}[demo]${NC} $*"; }
+warn()  { echo -e "${YELLOW}[benchmark]${NC} $*"; }
 
 # ---------------------------------------------------------------------------
 # Flags
@@ -48,7 +48,7 @@ if [[ "$PHASED_PREVIEW" == "true" ]]; then
     say ""
 
     PREVIEW_TMPDIR="$(mktemp -d)"
-    PLAN_ID="plan-demo-$(date -u +%Y%m%d-%H%M%S)"
+    PLAN_ID="plan-benchmark-$(date -u +%Y%m%d-%H%M%S)"
     PREVIEW_PLANS="$PREVIEW_TMPDIR/plans"
     PREVIEW_TASKLISTS="$PREVIEW_TMPDIR/task-lists"
     mkdir -p "$PREVIEW_PLANS/$PLAN_ID"
@@ -59,7 +59,7 @@ import json, sys
 plan_id, plan_file, input_file = sys.argv[1], sys.argv[2], sys.argv[3]
 plan_text = (
     "---\nplan_id: " + plan_id +
-    "\ntitle: Demo phased-dispatch plan\nstatus: pending\ncreated_at: 2026-01-01T00:00:00Z\n---\n\nDemo plan body."
+    "\ntitle: NPT benchmark plan\nstatus: pending\ncreated_at: 2026-01-01T00:00:00Z\n---\n\nNPT benchmark plan body."
 )
 open(plan_file, 'w').write(plan_text)
 json.dump({
@@ -132,10 +132,10 @@ if ! command -v claude >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# The canonical demo task
+# The canonical benchmark task
 #
 # Both paths produce a one-paragraph summary of the same input document.
-# We use this kit's own README as the document under test so the demo is
+# We use this kit's own README as the document under test so the benchmark is
 # self-contained — no external data required.
 # ---------------------------------------------------------------------------
 
@@ -149,7 +149,7 @@ fi
 
 hi ""
 hi "╭────────────────────────────────────────────────────────────╮"
-hi "│  NPS NOP — Token-Savings Demonstration                      │"
+hi "│  Token-Savings Benchmark                                    │"
 hi "╰────────────────────────────────────────────────────────────╯"
 hi ""
 echo "Running the same task two ways and comparing NPT consumed."
@@ -176,7 +176,7 @@ $(cat "$SUBJECT_FILE")"
 
 ./scripts/spawn-agent.sh clean researcher-01 > /dev/null 2>&1 || true
 
-# Demo artefacts go under the kit's runtime state home. Default:
+# Benchmark artefacts go under the kit's runtime state home. Default:
 # $HOME/.nps-kit/ (or $XDG_STATE_HOME/nps-kit on Linux systems that set
 # XDG_STATE_HOME). Any individual NPS_*_HOME env var overrides the
 # corresponding subdir.
@@ -187,11 +187,11 @@ elif [[ -n "${XDG_STATE_HOME:-}" ]]; then
 else
     STATE_HOME="$HOME/.nps-kit"
 fi
-DEMO_LOGS="${NPS_LOGS_HOME:-$STATE_HOME/logs}"
-DEMO_AGENTS="${NPS_AGENTS_HOME:-$STATE_HOME/agents}"
-naive_out="$DEMO_LOGS/demo-naive.json"
-nop_out="$DEMO_LOGS/demo-nop.json"
-mkdir -p "$DEMO_LOGS"
+BENCH_LOGS="${NPS_LOGS_HOME:-$STATE_HOME/logs}"
+BENCH_AGENTS="${NPS_AGENTS_HOME:-$STATE_HOME/agents}"
+naive_out="$BENCH_LOGS/bench-naive.json"
+nop_out="$BENCH_LOGS/bench-nop.json"
+mkdir -p "$BENCH_LOGS"
 
 # Run both paths concurrently. Each gets its own usage block in the JSON
 # response; NPT measurement is per-call so concurrency doesn't affect it.
@@ -237,7 +237,7 @@ naive_npt="${naive_stats%%|*}"
 naive_usd="${naive_stats##*|}"
 
 # Extract Path 2 NPT from researcher-01's result.json
-nop_result_dir="$DEMO_AGENTS/researcher-01/done"
+nop_result_dir="$BENCH_AGENTS/researcher-01/done"
 latest_result=$(ls -t "$nop_result_dir"/*.result.json 2>/dev/null | head -1 || echo "")
 if [[ -n "$latest_result" ]]; then
     nop_npt=$(python3 - "$latest_result" <<'PYEOF' 2>/dev/null || echo "0"

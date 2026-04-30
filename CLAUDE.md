@@ -23,9 +23,9 @@ pnpm test         # test all workspaces
 pnpm typecheck    # typecheck all workspaces
 pnpm clean        # clean all workspaces
 
-# Kit setup and demo
+# Kit setup and benchmark
 kits/agents/bin/setup    # first-run: runtime dirs + default workers (coder-01, critic-01, researcher-01)
-kits/agents/bin/demo     # naive vs NOP token-savings demo
+kits/agents/bin/benchmark # naive vs NOP token-savings benchmark
 
 # Worker lifecycle (kits/agents/scripts/spawn-agent.sh)
 ./scripts/spawn-agent.sh setup <id> <type>                  # type: coder|critic|researcher
@@ -69,7 +69,7 @@ Execute      ← Workers in isolated worktrees, narrow intent, single-shot
 
 Each layer reads one filesystem artifact and produces another, so adopters can insert layers (risk review, context enrichment, validation) without modifying kit code. See [`docs/architecture.md`](kits/agents/docs/architecture.md) §2 for the gate boundaries and verification responsibilities.
 
-The **Decomposer interface** is mandated; its implementation is not. The kit ships [`scripts/lib/decomposers/trivial.py`](kits/agents/scripts/lib/decomposers/trivial.py) (one task per plan, broad scope) for the demo. Adopters override via `config.json::decomposer_cmd`. Trivial is **first-emission only** — exits 2 on any pushback context, escalating to OSer (per #115).
+The **Decomposer interface** is mandated; its implementation is not. The kit ships [`scripts/lib/decomposers/trivial.py`](kits/agents/scripts/lib/decomposers/trivial.py) (one task per plan, broad scope) for the benchmark. Adopters override via `config.json::decomposer_cmd`. Trivial is **first-emission only** — exits 2 on any pushback context, escalating to OSer (per #115).
 
 ### Runtime state lives outside the repo
 
@@ -188,7 +188,7 @@ Plugins (`plugins/discord/`, `plugins/cost-monitor/`) symlink their hooks into t
 
 ### Token efficiency (the core value proposition)
 
-Naive orchestration inlines full context into the prompt — every token counts against the budget. NOP separates the intent (~200 tokens) from the context (worker reads from scope on demand). `bin/demo` measures this delta on live hardware (~83% NPT savings on the typical 3-sentence describe-this-kit task).
+Naive orchestration inlines full context into the prompt — every token counts against the budget. NOP separates the intent (~200 tokens) from the context (worker reads from scope on demand). `bin/benchmark` measures this delta on live hardware (~83% NPT savings on the typical 3-sentence describe-this-kit task).
 
 ## NPS spec source of truth
 

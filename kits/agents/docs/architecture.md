@@ -354,7 +354,7 @@ The kit ships `scripts/lib/decomposers/trivial.py`:
 - `success_criteria = {}`
 - `agent` = first available worker of type `coder`
 
-Makes `bin/demo` runnable without external LLM integration. Adopters ship sophisticated Decomposers via config override.
+Makes `bin/benchmark` runnable without external LLM integration. Adopters ship sophisticated Decomposers via config override.
 
 **First-emission only.** The trivial decomposer emits identical output regardless of pushback context. When invoked with a non-null `prior_version` or `pushback`, it exits with code 2 and a clear stderr message. `cmd_decompose` catches exit 2, logs a `decomposer_failed` escalation event with `pushback_reason: "pushback_unsupported"`, and surfaces this to the OSer. Pushback against trivial output escalates to the OSer for manual re-decomposition; it does not produce a silently-identical re-emission.
 

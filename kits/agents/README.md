@@ -12,7 +12,7 @@ see [§11 of the implementation spec](./docs/implementation-spec.md#11-runtime-s
 **Why use it:**
 - **Token savings.** Workers read context from their local scope. Orchestrators
   don't have to stuff the whole context into a prompt — they write a small intent
-  message. See `bin/demo` for a live NPT comparison on your machine.
+  message. See `bin/benchmark` for a live NPT comparison on your machine.
 - **Runtime-agnostic protocol.** The mailbox protocol works with any agent runtime
   that can read a file and write a result. This kit ships a reference wrapper for
   Claude Code CLI; the same pattern wraps any other runtime.
@@ -27,12 +27,12 @@ see [§11 of the implementation spec](./docs/implementation-spec.md#11-runtime-s
 git clone https://github.com/Lab-Cubes/agent-orchestration-kit.git
 cd agent-orchestration-kit/kits/agents
 ./bin/setup
-./bin/demo
+./bin/benchmark
 ```
 
 That's it. `bin/setup` creates your runtime directories and three default
-workers. `bin/demo` runs a canonical task two ways (naive vs NOP) and shows
-NPT saved on your machine.
+workers. `bin/benchmark` runs a canonical task two ways (naive vs NOP) and
+shows NPT saved on your machine.
 
 **Prerequisites:** Node 22+, pnpm 10+, git, Python 3 (for JSON processing in shell),
 and an AI agent CLI. The reference implementation uses
