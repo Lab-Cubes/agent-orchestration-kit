@@ -15,9 +15,18 @@
 #   - Supersede with zero in-flight (all v_N completed): all archived, state flips
 #   - Mixed-state graph: per-node event granularity
 #
-# Hard cap: 12 test cases.
+# Hard cap: 13 test cases.
 
 load 'helpers/build-kit-tree.bash'
+
+HOST_REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
+export HOST_REPO_ROOT
+
+setup_file() {
+    HOST_AGENT_REFS_SNAPSHOT_FILE="$(mktemp "${TMPDIR:-/tmp}/supersede-host-agent-refs.XXXXXX")"
+    git -C "$HOST_REPO_ROOT" for-each-ref --format='%(refname)' refs/heads/agent > "$HOST_AGENT_REFS_SNAPSHOT_FILE"
+    export HOST_AGENT_REFS_SNAPSHOT_FILE
+}
 
 setup() {
     KIT_TMPDIR="$(mktemp -d)"
@@ -37,11 +46,21 @@ setup() {
     run_spawner setup coder-01 coder
     run_spawner setup coder-02 coder
 
+    # Minimal git repo used as dispatch-tasklist cwd when node scope is ".".
+    REPO="$KIT_TMPDIR/repo"
+    git init "$REPO" -b main 2>/dev/null
+    git -C "$REPO" config user.email "test@example.com"
+    git -C "$REPO" config user.name "Test"
+    touch "$REPO/file.txt"
+    git -C "$REPO" add .
+    git -C "$REPO" commit -m "initial" 2>/dev/null
+
     FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures/task-lists"
 }
 
 teardown() {
     # Prune any worktrees before removing the tmpdir
+    git -C "${REPO:-/dev/null}" worktree prune 2>/dev/null || true
     for repo in "$KIT_TMPDIR"/repos/*/; do
         [[ -d "$repo" ]] && git -C "$repo" worktree prune 2>/dev/null || true
     done
@@ -53,12 +72,15 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 run_dt() {
-    NPS_AGENTS_HOME="$KIT_AGENTS" \
-    NPS_WORKTREES_HOME="$KIT_WORKTREES" \
-    NPS_LOGS_HOME="$KIT_LOGS" \
-    NPS_PLANS_HOME="$NPS_PLANS_HOME" \
-    NPS_TASKLISTS_HOME="$NPS_TASKLISTS_HOME" \
-    "$KIT_SCRIPTS/spawn-agent.sh" dispatch-tasklist "$@"
+    (
+        cd "$REPO" || exit 1
+        NPS_AGENTS_HOME="$KIT_AGENTS" \
+        NPS_WORKTREES_HOME="$KIT_WORKTREES" \
+        NPS_LOGS_HOME="$KIT_LOGS" \
+        NPS_PLANS_HOME="$NPS_PLANS_HOME" \
+        NPS_TASKLISTS_HOME="$NPS_TASKLISTS_HOME" \
+        "$KIT_SCRIPTS/spawn-agent.sh" dispatch-tasklist "$@"
+    )
 }
 
 # Create a git repo with a worktree on a worker branch.
@@ -528,4 +550,16 @@ PYEOF
     run git -C "$_REPO" log --oneline "$new_branch"
     # The supersede commit must appear even on a clean worktree
     echo "$output" | grep -q "supersede: partial work at v1"
+}
+
+# ---------------------------------------------------------------------------
+# 13. Host agent refs unchanged by dispatch-tasklist runs
+# ---------------------------------------------------------------------------
+
+@test "host agent refs unchanged by dispatch-tasklist runs" {
+    local current_refs="$KIT_TMPDIR/host-agent-refs.after"
+    git -C "$HOST_REPO_ROOT" for-each-ref --format='%(refname)' refs/heads/agent > "$current_refs"
+
+    run diff -u "$HOST_AGENT_REFS_SNAPSHOT_FILE" "$current_refs"
+    [ "$status" -eq 0 ]
 }

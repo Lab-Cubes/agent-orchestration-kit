@@ -63,7 +63,7 @@ Every task arrives as an `.intent.json` file in `inbox/`:
     "from": "urn:nps:agent:{issuer-domain}:{issuer}",
     "to": "urn:nps:agent:{issuer-domain}:{worker}",
     "created_at": "ISO 8601 UTC",
-    "priority": "urgent|normal|low",
+    "priority": "low|normal|high",
     "mailbox": { "base": "./" },
     "context": {
       "files": ["relevant file paths"],

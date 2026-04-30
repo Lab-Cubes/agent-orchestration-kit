@@ -102,7 +102,7 @@ export interface Alternative {
   probability: number;
 }
 
-export type Priority = "urgent" | "normal" | "low";
+export type Priority = "low" | "normal" | "high";
 
 export type TaskCategory = "code" | "research" | "docs" | "test" | "refactor" | "ops";
 

@@ -8,6 +8,15 @@
 
 load 'helpers/build-kit-tree.bash'
 
+HOST_REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
+export HOST_REPO_ROOT
+
+setup_file() {
+    HOST_AGENT_REFS_SNAPSHOT_FILE="$(mktemp "${TMPDIR:-/tmp}/end-to-end-host-agent-refs.XXXXXX")"
+    git -C "$HOST_REPO_ROOT" for-each-ref --format='%(refname)' refs/heads/agent > "$HOST_AGENT_REFS_SNAPSHOT_FILE"
+    export HOST_AGENT_REFS_SNAPSHOT_FILE
+}
+
 setup() {
     KIT_TMPDIR="$(mktemp -d)"
     build_kit_tree "$KIT_TMPDIR"
@@ -56,12 +65,15 @@ _run_e2e() {
 }
 
 run_dt() {
-    NPS_AGENTS_HOME="$KIT_AGENTS" \
-    NPS_WORKTREES_HOME="$KIT_WORKTREES" \
-    NPS_LOGS_HOME="$KIT_LOGS" \
-    NPS_PLANS_HOME="$NPS_PLANS_HOME" \
-    NPS_TASKLISTS_HOME="$NPS_TASKLISTS_HOME" \
-    "$KIT_SCRIPTS/spawn-agent.sh" dispatch-tasklist "$@"
+    (
+        cd "$REPO" || exit 1
+        NPS_AGENTS_HOME="$KIT_AGENTS" \
+        NPS_WORKTREES_HOME="$KIT_WORKTREES" \
+        NPS_LOGS_HOME="$KIT_LOGS" \
+        NPS_PLANS_HOME="$NPS_PLANS_HOME" \
+        NPS_TASKLISTS_HOME="$NPS_TASKLISTS_HOME" \
+        "$KIT_SCRIPTS/spawn-agent.sh" dispatch-tasklist "$@"
+    )
 }
 
 _run_merge() {
@@ -368,5 +380,17 @@ assert d["prior_version"] == 1, d["prior_version"]
 assert d["pushback_reason"] == "scope_insufficient", d["pushback_reason"]
 print("ok")
 PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 12. Host agent refs unchanged by dispatch-tasklist runs
+# ---------------------------------------------------------------------------
+
+@test "host agent refs unchanged by dispatch-tasklist runs" {
+    local current_refs="$KIT_TMPDIR/host-agent-refs.after"
+    git -C "$HOST_REPO_ROOT" for-each-ref --format='%(refname)' refs/heads/agent > "$current_refs"
+
+    run diff -u "$HOST_AGENT_REFS_SNAPSHOT_FILE" "$current_refs"
     [ "$status" -eq 0 ]
 }

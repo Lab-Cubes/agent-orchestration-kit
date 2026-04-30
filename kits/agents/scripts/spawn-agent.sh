@@ -21,7 +21,7 @@
 #   --time-limit N      Safety net wall-clock seconds
 #   --model MODEL       Model override (default: sonnet)
 #   --scope PATH,...    Comma-separated scope paths
-#   --priority LEVEL    urgent|normal|low (default: normal)
+#   --priority LEVEL    low|normal|high (default: normal)
 #   --category CAT      Task category (default: code)
 #   --context-file F    JSON file with extra context
 #   --dry-run           Print intent JSON without launching
@@ -86,7 +86,7 @@ case "${1:-help}" in
         echo "  --time-limit N     Wall-clock seconds (default: $DEFAULT_TIME_LIMIT)"
         echo "  --model MODEL      Claude model (default: $DEFAULT_MODEL)"
         echo "  --scope PATH,...   Scope (git repos get worktree isolation)"
-        echo "  --priority LEVEL   urgent|normal|low"
+        echo "  --priority LEVEL   low|normal|high"
         echo "  --category CAT     code|docs|test|research|refactor|ops"
         echo "  --context-file F   JSON context file"
         echo "  --dry-run          Print intent without launching"

@@ -25,7 +25,7 @@ Each adapter lives in `scripts/lib/adapters/<name>.py` and extends `AdapterBase`
 
 1. Create `scripts/lib/adapters/<name>.py`
 2. Extend `AdapterBase`, implement all 6 methods
-3. Add the runtime name to the preflight check in `spawn-agent.sh` `cmd_dispatch()`
+3. Add the runtime name to the preflight check in `kits/agents/scripts/lib/cmd_dispatch.sh` `cmd_dispatch()`
 4. Add a loader branch in the dispatch Python heredoc (`if runtime_name == '<name>':`)
 5. Add a mock in `tests/bin/<cli-name>` and BATS tests in `tests/test_runtime_adapter.bats`
 

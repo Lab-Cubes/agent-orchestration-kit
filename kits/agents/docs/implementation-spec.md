@@ -50,7 +50,7 @@ Worker ID format: `{type}-{NN}` — e.g. `coder-01`, `researcher-01`.
     "from": "urn:nps:agent:{issuer_domain}:{issuer_agent_id}",
     "to": "urn:nps:agent:{issuer_domain}:{worker_id}",
     "created_at": "2026-04-18T10:42:48.000Z",
-    "priority": "urgent | normal | low",
+    "priority": "low | normal | high",
     "category": "code | docs | test | research | refactor | ops",
     "mailbox": { "base": "./" },
     "success_criteria": {
@@ -542,4 +542,4 @@ and the worker spawn logic accordingly.
 
 The reference expects `--output-format json` with a single top-level JSON
 document. Other runtimes may stream tokens or emit a different shape. The
-parser in `spawn-agent.sh`'s dispatch function is the integration point.
+dispatch parser and integration point live in `kits/agents/scripts/lib/cmd_dispatch.sh`.
