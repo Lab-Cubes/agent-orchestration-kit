@@ -309,7 +309,7 @@ The kit mandates an interface; it does not mandate an implementation.
 
 ### 5.1 Invocation contract
 
-Command: `cmd_decompose` (in `spawn-agent.sh`). Stdin receives JSON, stdout emits JSON, exit 0 = success.
+Command: `cmd_decompose`, which lives in `kits/agents/scripts/lib/cmd_decompose.sh`. Stdin receives JSON, stdout emits JSON, exit 0 = success.
 
 **Input:**
 
@@ -401,7 +401,7 @@ Dispatcher holds all worker merges until the full task-list-state is green. This
 When `v_{N+1}.json` is acked while v_N is still active, Dispatcher processes every v_N node (not just `running` ones):
 
 1. **Per-node routing by current status + result-file presence:**
-   - **`running`** (worker still alive): SIGINT via existing shutdown ladder (`spawn-agent.sh:547-559`), then proceed to step 2.
+   - **`running`** (worker still alive): graceful shutdown via the dispatch-side ladder in `kits/agents/scripts/lib/cmd_dispatch.sh`, then proceed to step 2.
    - **`blocked` with a result file carrying `pushback_reason`** (pushback-blocked): worker already exited; its pushback is what triggered v_{N+1}. Skip SIGINT + HEAD check + commit. Rename branch to `superseded/...`, set node status `superseded`, emit event `dispatcher_acted: "pushback_superseded"`. These nodes do NOT gate the drain — v_{N+1} is explicitly the resolution.
    - **`blocked` with no pushback result file** (complex-HEAD from a prior drain attempt): stays `blocked`; no action. Gates drain (step 6).
    - **Terminal** (`completed | failed | cancelled | timeout | superseded`): **branch rename only** — rename `agent/{agent-id}/{task-id}` → `superseded/{plan-id}/v{N}/...`. Node status unchanged. Emit event `dispatcher_acted: "supersede_archived"`. Why: un-renamed terminal branches at `agent/...` would otherwise remain mergeable by `cmd_merge` after the version flip, causing v_N terminal work to land alongside v_{N+1} work (duplication or conflict). Archiving keeps the work preservable (cherry-pick from `superseded/...`) without it being treated as current.
@@ -523,3 +523,4 @@ Layer replacement (e.g., changing the Dispatcher from one-shot to long-running d
 | 0.2.4-draft | 2026-04-25 | `osi_ack_by` added to EscalationEvent TS type + schema (closes #80). Required field; emitted by cmd_ack (#67). |
 | 0.2.5-draft | 2026-04-27 | §5.4 trivial decomposer is first-emission only; exit 2 on pushback context; `cmd_decompose` catches as `decomposer_failed`/`pushback_unsupported` escalation (closes #115). |
 | 0.2.6-draft | 2026-04-30 | §9 fixed stale `spec/protocols/` link post-NPS-Release alpha.3 flatten (closes #158). |
+| 0.2.7-draft | 2026-04-30 | Patch stale post-#103 implementation references from legacy command-wrapper internals to `scripts/lib/cmd_*.sh` locations. |

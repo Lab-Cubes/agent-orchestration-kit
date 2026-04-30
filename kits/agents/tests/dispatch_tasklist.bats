@@ -8,9 +8,18 @@
 # TODO(#66): Once the Decomposer is complete, add tests that drive the full
 # Plan → Decompose → ack → dispatch-tasklist pipeline end-to-end.
 #
-# Hard cap: 10 test cases.
+# Hard cap: 11 test cases.
 
 load 'helpers/build-kit-tree.bash'
+
+HOST_REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
+export HOST_REPO_ROOT
+
+setup_file() {
+    HOST_AGENT_REFS_SNAPSHOT_FILE="$(mktemp "${TMPDIR:-/tmp}/dispatch-tasklist-host-agent-refs.XXXXXX")"
+    git -C "$HOST_REPO_ROOT" for-each-ref --format='%(refname)' refs/heads/agent > "$HOST_AGENT_REFS_SNAPSHOT_FILE"
+    export HOST_AGENT_REFS_SNAPSHOT_FILE
+}
 
 setup() {
     KIT_TMPDIR="$(mktemp -d)"
@@ -34,10 +43,20 @@ setup() {
     run_spawner setup coder-02 coder
     run_spawner setup coder-03 coder
 
+    # Minimal git repo used as dispatch-tasklist cwd when node scope is ".".
+    REPO="$KIT_TMPDIR/repo"
+    git init "$REPO" -b main 2>/dev/null
+    git -C "$REPO" config user.email "test@example.com"
+    git -C "$REPO" config user.name "Test"
+    touch "$REPO/file.txt"
+    git -C "$REPO" add .
+    git -C "$REPO" commit -m "initial" 2>/dev/null
+
     FIXTURES_DIR="${BATS_TEST_DIRNAME}/fixtures/task-lists"
 }
 
 teardown() {
+    git -C "${REPO:-/dev/null}" worktree prune 2>/dev/null || true
     rm -rf "${KIT_TMPDIR:-}"
 }
 
@@ -47,12 +66,15 @@ teardown() {
 
 # Run dispatch-tasklist with all isolated-env overrides.
 run_dt() {
-    NPS_AGENTS_HOME="$KIT_AGENTS" \
-    NPS_WORKTREES_HOME="$KIT_WORKTREES" \
-    NPS_LOGS_HOME="$KIT_LOGS" \
-    NPS_PLANS_HOME="$NPS_PLANS_HOME" \
-    NPS_TASKLISTS_HOME="$NPS_TASKLISTS_HOME" \
-    "$KIT_SCRIPTS/spawn-agent.sh" dispatch-tasklist "$@"
+    (
+        cd "$REPO" || exit 1
+        NPS_AGENTS_HOME="$KIT_AGENTS" \
+        NPS_WORKTREES_HOME="$KIT_WORKTREES" \
+        NPS_LOGS_HOME="$KIT_LOGS" \
+        NPS_PLANS_HOME="$NPS_PLANS_HOME" \
+        NPS_TASKLISTS_HOME="$NPS_TASKLISTS_HOME" \
+        "$KIT_SCRIPTS/spawn-agent.sh" dispatch-tasklist "$@"
+    )
 }
 
 # Place a fixture as an acked task-list vN.json for a plan.
@@ -365,4 +387,16 @@ PYEOF
         total=$(( total + n ))
     done
     [ "$total" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 11. Host agent refs unchanged by dispatch-tasklist runs
+# ---------------------------------------------------------------------------
+
+@test "host agent refs unchanged by dispatch-tasklist runs" {
+    local current_refs="$KIT_TMPDIR/host-agent-refs.after"
+    git -C "$HOST_REPO_ROOT" for-each-ref --format='%(refname)' refs/heads/agent > "$current_refs"
+
+    run diff -u "$HOST_AGENT_REFS_SNAPSHOT_FILE" "$current_refs"
+    [ "$status" -eq 0 ]
 }
