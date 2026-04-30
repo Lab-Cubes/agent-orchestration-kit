@@ -34,7 +34,7 @@ NOP mailbox dispatch — and shows real NPT saved on your machine.
 |---|---|
 | An operator wanting multi-agent orchestration now | [`kits/agents`](./kits/agents) — clone, `./bin/setup`, run |
 | A plugin author | [`plugins/cost-monitor`](./plugins/cost-monitor) (minimal: one hook, no credentials) or [`plugins/discord`](./plugins/discord) as templates; see [`kits/agents/hooks/README.md`](./kits/agents/hooks/README.md) for the contract |
-| An AI agent scanning this repo for an operator | Every directory has an `AGENTS.md` with exact install steps |
+| An AI agent scanning this repo for an operator | Install runbooks use `INSTALL.md` with exact setup steps |
 | A developer needing NPS protocol SDKs | [labacacia/NPS-Release](https://github.com/labacacia/NPS-Release) — SDKs in 8 languages |
 
 ## The NPS protocol family

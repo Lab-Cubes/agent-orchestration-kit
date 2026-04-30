@@ -8,7 +8,7 @@ Before authoring or briefing work in this kit, read the canonical kit docs in th
 
 - [`kits/agents/docs/architecture.md`](kits/agents/docs/architecture.md) — four-layer model (Plan → Decompose → Dispatch → Execute), task-list schema, gate boundaries, NPS alignment.
 - [`kits/agents/docs/implementation-spec.md`](kits/agents/docs/implementation-spec.md) — wire-format runbook (intent + result schemas, state machine, hook contract, NPT formula, port-verification checklist).
-- [`kits/agents/templates/AGENT-AGENTS.md`](kits/agents/templates/AGENT-AGENTS.md) — worker bootstrap; **Change Discipline** (surgical edits, simplicity bar, pushback over silent expansion) + **Debug Discipline** (3-failure / 15-min / repeat-question check-in triggers).
+- [`kits/agents/templates/AGENT-CLAUDE.md`](kits/agents/templates/AGENT-CLAUDE.md) — worker bootstrap; **Change Discipline** (surgical edits, simplicity bar, pushback over silent expansion) + **Debug Discipline** (3-failure / 15-min / repeat-question check-in triggers).
 - [`kits/agents/templates/personas/{coder,critic,researcher}.md`](kits/agents/templates/personas) — per-role overlays with anti-drift triggers, epistemic tagging (`[VERIFIED]` / `[OBSERVED]` / `[INFERRED]` / `[INSUFFICIENT_EVIDENCE]`), and termination heuristics.
 - [`kits/agents/docs/NPT.md`](kits/agents/docs/NPT.md) — NPT token accounting details.
 
@@ -23,9 +23,9 @@ pnpm test         # test all workspaces
 pnpm typecheck    # typecheck all workspaces
 pnpm clean        # clean all workspaces
 
-# Kit setup and demo
+# Kit setup and benchmark
 kits/agents/bin/setup    # first-run: runtime dirs + default workers (coder-01, critic-01, researcher-01)
-kits/agents/bin/demo     # naive vs NOP token-savings demo
+kits/agents/bin/benchmark # naive vs NOP token-savings benchmark
 
 # Worker lifecycle (kits/agents/scripts/spawn-agent.sh)
 ./scripts/spawn-agent.sh setup <id> <type>                  # type: coder|critic|researcher
@@ -89,7 +89,7 @@ $NPS_STATE_HOME/
 │   ├── active/                                        # claimed intents (RUNNING) — atomic mv from inbox/ is the claim lock
 │   ├── done/                                          # completed + result files (terminal)
 │   ├── blocked/                                       # blocked intents (awaiting external input)
-│   ├── AGENTS.md                                      # worker bootstrap (identity + protocol)
+│   ├── CLAUDE.md                                      # worker bootstrap (identity + protocol)
 │   └── .Codex/settings.json
 ├── worktrees/
 │   ├── {task-id}/                                     # active per-task worktree
@@ -135,7 +135,7 @@ Intentionally minimal — types only + test utilities. No production business lo
 
 ### Worker disciplines (post-#69 + #101 + #108/#112/#113/#114/#107 + #115)
 
-Workers inherit [`templates/AGENT-AGENTS.md`](kits/agents/templates/AGENT-AGENTS.md) plus a per-role persona overlay. The disciplines tighten what workers will do under runtime pressure:
+Workers inherit [`templates/AGENT-CLAUDE.md`](kits/agents/templates/AGENT-CLAUDE.md) plus a per-role persona overlay. The disciplines tighten what workers will do under runtime pressure:
 
 - **Change Discipline** (#69) — surgical changes, simplicity bar, pushback over silent expansion. Workers MUST NOT refactor adjacent code, add abstractions, or expand scope to make a task tractable.
 - **Debug Discipline** (#101) — three mandatory surface triggers. At any of: 3+ failing tests on the same area / 15 minutes without a progress signal / same question investigated twice — the worker writes a status (assertion text + hypothesis) and PAUSES until the OSer acknowledges.
@@ -148,7 +148,7 @@ Workers inherit [`templates/AGENT-AGENTS.md`](kits/agents/templates/AGENT-AGENTS
 
 NID format: `urn:nps:agent:{issuer_domain}:{agent_id}` — e.g. `urn:nps:agent:example.com:coder-01`. Default issuer domain is `dev.localhost`; override via `config.json::issuer_domain`.
 
-Worker instances live under `kits/agents/agents/` as starter configs; the runtime copies these to `$NPS_STATE_HOME/agents/` on `setup`. Each worker gets a `AGENTS.md` bootstrapped from `templates/AGENT-AGENTS.md` plus the matching `templates/personas/{type}.md` overlay.
+Worker instances live under `kits/agents/agents/` as starter configs; the runtime copies these to `$NPS_STATE_HOME/agents/` on `setup`. Each worker gets a `CLAUDE.md` bootstrapped from `templates/AGENT-CLAUDE.md` plus the matching `templates/personas/{type}.md` overlay.
 
 ### Scope carving (NOP §3.2)
 
@@ -164,7 +164,7 @@ Plugins (`plugins/discord/`, `plugins/cost-monitor/`) symlink their hooks into t
 
 ### Token efficiency (the core value proposition)
 
-Naive orchestration inlines full context into the prompt — every token counts against the budget. NOP separates the intent (~200 tokens) from the context (worker reads from scope on demand). `bin/demo` measures this delta on live hardware (~83% NPT savings on the typical 3-sentence describe-this-kit task).
+Naive orchestration inlines full context into the prompt — every token counts against the budget. NOP separates the intent (~200 tokens) from the context (worker reads from scope on demand). `bin/benchmark` measures this delta on live hardware (~83% NPT savings on the typical 3-sentence describe-this-kit task).
 
 ## NPS spec source of truth
 

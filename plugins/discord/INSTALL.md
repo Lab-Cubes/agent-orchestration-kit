@@ -1,4 +1,4 @@
-# AGENTS.md — Discord Plugin Install Spec
+# INSTALL.md — Discord Plugin Install Spec
 
 Install runbook for agent readers. Configures Discord notifications for the
 `@nps-kit/agents` kit. Every step exact.

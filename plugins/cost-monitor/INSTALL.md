@@ -1,4 +1,4 @@
-# AGENTS.md — Cost Monitor Plugin Install Spec
+# INSTALL.md — Cost Monitor Plugin Install Spec
 
 Install runbook for agent readers. Configures per-task cost logging and report
 for the `@nps-kit/agents` kit. Every step exact.
