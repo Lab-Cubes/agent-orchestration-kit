@@ -4,7 +4,7 @@
 Reads JSON from stdin; writes TaskListMessage JSON to stdout.
 Run with --self-test for an in-process smoke check.
 
-Not a production Decomposer. Makes bin/demo runnable without an LLM.
+Not a production Decomposer. Makes bin/benchmark runnable without an LLM.
 Adopters override decomposer_cmd in config.json with a sophisticated impl.
 
 Supported frontmatter format (strict subset of YAML):
