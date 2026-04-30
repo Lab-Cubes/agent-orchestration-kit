@@ -44,7 +44,7 @@ cmd_dispatch() {
     local plan_id=""
     local success_criteria_file=""
 
-    _budget_for_category() {
+    _disp_budget_for_category() {
         if [[ -f "$CONFIG_FILE" ]]; then
             python3 - "$CONFIG_FILE" "$1" "$DEFAULT_BUDGET_NPT" <<'PYEOF'
 import json, sys
@@ -79,7 +79,7 @@ PYEOF
         esac
     done
 
-    [[ -z "$budget" ]] && budget=$(_budget_for_category "$category")
+    [[ -z "$budget" ]] && budget=$(_disp_budget_for_category "$category")
 
     if [[ ! -d "$agent_dir" ]]; then
         err "Worker not set up: $agent_dir"
