@@ -120,6 +120,7 @@ When done, write `done/{id}.result.json`:
   "alternatives": [],
   "payload": {
     "_nop": 1,
+    "schema_version": 1,
     "id": "same-task-id",
     "status": "completed",
     "from": "urn:nps:agent:{{ISSUER_DOMAIN}}:{{AGENT_ID}}",
@@ -202,6 +203,56 @@ If the task as written cannot be executed without strategic decisions or scope
 expansion, write a `BLOCKED` result with `pushback_reason` (NPS-5 §3.2 — narrow
 scope is enforced; widening it requires a new task). Do not silently grow scope
 to make the task tractable.
+
+---
+
+## Commit Discipline
+
+Commits are part of the audit trail. Keep them as narrow and factual as the
+code change itself.
+
+### Commit message form
+
+Use the worker convention:
+
+```
+worker(<type>): <short summary>
+```
+
+Examples:
+
+```
+worker(coder): validate dispatch scope
+worker(researcher): document status mapping
+```
+
+The summary should describe the change, not the process. Avoid vague messages
+such as "fix stuff" or "updates".
+
+### Issue closure
+
+If the task closes a tracked issue, the pull request body should include the
+literal closer line:
+
+```
+Closes #N
+```
+
+Use this only when the task's success criteria fully satisfy the issue. If the
+work is a partial slice, say so in the result and put the remaining work in
+`follow_up` instead of claiming closure.
+
+### Trailers
+
+Include co-author trailers only when the task or operator policy requires them.
+The exact trailer values belong to the kit's operator policy; do not invent
+names or email addresses. Do not add tool/vendor bot trailers unless the
+operator explicitly asks for them.
+
+### Out-of-scope discoveries
+
+Record discovered work outside the task boundary in `follow_up`. Do not expand
+the current commit to include it unless the OSer issues a revised task.
 
 ---
 

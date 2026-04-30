@@ -25,6 +25,46 @@ setup() {
 }
 
 # ---------------------------------------------------------------------------
+# intent-message.schema.json
+# ---------------------------------------------------------------------------
+
+@test "intent-message: valid instance with typed spec_refs passes" {
+    run python3 "$VALIDATOR" \
+        "$SCHEMA_DIR/intent-message.schema.json" \
+        "$FIXTURES_DIR/intent-message-valid.json"
+
+    [ "$status" -eq 0 ]
+}
+
+@test "intent-message: invalid spec_refs role fails" {
+    run python3 "$VALIDATOR" \
+        "$SCHEMA_DIR/intent-message.schema.json" \
+        "$FIXTURES_DIR/intent-message-bad-spec-ref-role.json"
+
+    [ "$status" -eq 1 ]
+}
+
+# ---------------------------------------------------------------------------
+# result-message.schema.json
+# ---------------------------------------------------------------------------
+
+@test "result-message: valid instance with schema_version passes" {
+    run python3 "$VALIDATOR" \
+        "$SCHEMA_DIR/result-message.schema.json" \
+        "$FIXTURES_DIR/result-message-valid.json"
+
+    [ "$status" -eq 0 ]
+}
+
+@test "result-message: missing payload schema_version fails" {
+    run python3 "$VALIDATOR" \
+        "$SCHEMA_DIR/result-message.schema.json" \
+        "$FIXTURES_DIR/result-message-missing-schema-version.json"
+
+    [ "$status" -eq 1 ]
+}
+
+# ---------------------------------------------------------------------------
 # task-list.schema.json
 # ---------------------------------------------------------------------------
 

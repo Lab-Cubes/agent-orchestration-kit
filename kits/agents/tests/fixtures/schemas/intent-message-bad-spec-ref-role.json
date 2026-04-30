@@ -1,0 +1,23 @@
+{
+  "_ncp": 1,
+  "type": "intent",
+  "intent": "implement-schema-update",
+  "confidence": 0.95,
+  "payload": {
+    "_nop": 1,
+    "id": "task-sage-20260430-120000",
+    "from": "urn:nps:agent:example.com:sage",
+    "created_at": "2026-04-30T12:00:00.000Z",
+    "mailbox": {
+      "base": "./"
+    },
+    "context": {
+      "spec_refs": [
+        {
+          "url": "https://github.com/Lab-Cubes/agent-orchestration-kit/issues/130",
+          "role": "maybe"
+        }
+      ]
+    }
+  }
+}

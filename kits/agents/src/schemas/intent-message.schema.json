@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Lab-Cubes/agent-orchestration-kit/raw/main/kits/agents/src/schemas/intent-message.schema.json",
+  "title": "IntentMessage",
+  "description": "Worker intent message. Mirrors IntentMessage and NopIntentPayload in nop-types.ts.",
+  "type": "object",
+  "required": ["_ncp", "type", "intent", "confidence", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "_ncp": {
+      "type": "integer",
+      "const": 1
+    },
+    "type": {
+      "type": "string",
+      "const": "intent"
+    },
+    "intent": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "payload": {
+      "$ref": "#/$defs/NopIntentPayload"
+    }
+  },
+  "$defs": {
+    "NopIntentPayload": {
+      "type": "object",
+      "required": ["_nop", "id", "from", "created_at", "mailbox"],
+      "additionalProperties": false,
+      "properties": {
+        "_nop": {
+          "type": "integer",
+          "const": 1
+        },
+        "id": {
+          "type": "string"
+        },
+        "plan_id": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "normal", "high"]
+        },
+        "category": {
+          "type": "string",
+          "enum": ["code", "research", "docs", "test", "refactor", "ops"]
+        },
+        "mailbox": {
+          "type": "object",
+          "required": ["base"],
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "type": "string"
+            },
+            "active": {
+              "type": "string"
+            },
+            "done": {
+              "type": "string"
+            }
+          }
+        },
+        "context": {
+          "$ref": "#/$defs/TaskContext"
+        },
+        "constraints": {
+          "$ref": "#/$defs/TaskConstraints"
+        },
+        "success_criteria": {
+          "type": "object"
+        }
+      }
+    },
+    "TaskContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "knowledge": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "spec_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SpecRef"
+          }
+        },
+        "branch": {
+          "type": "string"
+        }
+      }
+    },
+    "SpecRef": {
+      "type": "object",
+      "required": ["url", "role"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["dod", "context", "prior_art"]
+        }
+      }
+    },
+    "TaskConstraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "time_limit": {
+          "type": "integer"
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "budget_npt": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

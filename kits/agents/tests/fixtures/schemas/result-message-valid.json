@@ -1,0 +1,24 @@
+{
+  "_ncp": 1,
+  "type": "result",
+  "value": "Updated schema fields.",
+  "probability": 0.9,
+  "alternatives": [],
+  "payload": {
+    "_nop": 1,
+    "schema_version": 1,
+    "id": "task-sage-20260430-120000",
+    "plan_id": "plan-example.com-20260430-120000",
+    "status": "completed",
+    "from": "urn:nps:agent:example.com:coder-01",
+    "picked_up_at": "2026-04-30T12:00:01.000Z",
+    "completed_at": "2026-04-30T12:02:01.000Z",
+    "files_changed": ["kits/agents/src/nop-types.ts"],
+    "commits": ["abc1234 - worker(coder): update schema fields"],
+    "follow_up": [],
+    "duration": 120,
+    "cost_npt": 1234,
+    "context_capacity": "fresh",
+    "error": null
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Lab-Cubes/agent-orchestration-kit/raw/main/kits/agents/src/schemas/result-message.schema.json",
+  "title": "ResultMessage",
+  "description": "Worker result message. Mirrors ResultMessage and NopResultPayload in nop-types.ts.",
+  "type": "object",
+  "required": ["_ncp", "type", "value", "probability", "alternatives", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "_ncp": {
+      "type": "integer",
+      "const": 1
+    },
+    "type": {
+      "type": "string",
+      "const": "result"
+    },
+    "value": {
+      "type": "string"
+    },
+    "probability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "alternatives": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Alternative"
+      }
+    },
+    "payload": {
+      "$ref": "#/$defs/NopResultPayload"
+    }
+  },
+  "$defs": {
+    "Alternative": {
+      "type": "object",
+      "required": ["value", "probability"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "probability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "NopResultPayload": {
+      "type": "object",
+      "required": [
+        "_nop",
+        "schema_version",
+        "id",
+        "status",
+        "from",
+        "picked_up_at",
+        "completed_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "_nop": {
+          "type": "integer",
+          "const": 1
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "id": {
+          "type": "string"
+        },
+        "plan_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["completed", "failed", "timeout", "blocked"]
+        },
+        "pushback_reason": {
+          "type": ["string", "null"],
+          "enum": ["scope_insufficient", "intent_unclear", "capability_missing", null]
+        },
+        "from": {
+          "type": "string"
+        },
+        "picked_up_at": {
+          "type": "string"
+        },
+        "completed_at": {
+          "type": "string"
+        },
+        "files_changed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "commits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "follow_up": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "duration": {
+          "type": "integer"
+        },
+        "cost_npt": {
+          "type": "integer"
+        },
+        "context_capacity": {
+          "type": "string",
+          "enum": ["fresh", "half", "tight", "imminent"]
+        },
+        "error": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}

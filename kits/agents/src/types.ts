@@ -20,6 +20,7 @@ export type {
   NopResultPayload,
   Priority,
   ResultMessage,
+  SpecRef,
   TaskCategory,
   TaskConstraints,
   TaskContext,
