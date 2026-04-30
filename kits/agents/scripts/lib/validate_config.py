@@ -22,6 +22,7 @@ def validate(config):
             errors.append(f"'{key}' must be a non-empty string")
 
     _check_positive_int(config, 'default_budget_npt', errors)
+    _check_positive_int(config, 'max_budget_npt_per_node', errors)
     _check_positive_int(config, 'default_time_limit_s', errors)
     _check_positive_int(config, 'default_max_turns', errors)
     _check_positive_int(config, 'default_shutdown_grace_s', errors)
