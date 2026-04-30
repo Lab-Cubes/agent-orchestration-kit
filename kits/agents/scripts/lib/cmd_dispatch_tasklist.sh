@@ -661,8 +661,9 @@ PYEOF
                 [[ -f "$candidate" ]] && result_file="$candidate"
             fi
 
-            # Determine node outcome from result payload
-            local node_status="failed" node_pushback_reason=""
+            # Determine node outcome from result payload, or preserve kit-side
+            # dispatch errors when no worker result exists.
+            local node_status="failed" node_pushback_reason="" node_failure_reason=""
             if [[ "$result_file" != "null" ]]; then
                 local _raw_outcome
                 _raw_outcome=$(python3 - "$result_file" <<'PYEOF'
@@ -679,6 +680,8 @@ PYEOF
                 )
                 node_status=$(printf '%s' "$_raw_outcome" | sed -n '1p')
                 node_pushback_reason=$(printf '%s' "$_raw_outcome" | sed -n '2p')
+            elif [[ $node_exit -ne 0 ]]; then
+                node_failure_reason=$(grep -oE 'KIT-DISPATCH-NO-LIFECYCLE' "$dispatch_log" 2>/dev/null | head -1 || true)
             fi
 
             if [[ "$node_status" == "pushback" ]]; then
@@ -720,7 +723,13 @@ PYEOF
                 )
                 _node_max_r=$(_dt_node_field "$node_id" 7)
                 _node_retries="${_node_retries:-0}"; _node_max_r="${_node_max_r:-0}"
-                if [[ "$_node_retries" -lt "${_node_max_r:-0}" ]]; then
+                if [[ -n "$node_failure_reason" ]]; then
+                    _dt_update_node "$node_id" "failed" "${task_id:-null}" "$result_file"
+                    _dt_append_event "escalated_to_oser" "${task_id:-null}" "task" \
+                        "null" "$node_failure_reason" "null"
+                    any_failed=true
+                    log "cmd_dispatch_tasklist: node $node_id FAILED ($node_failure_reason)"
+                elif [[ "$_node_retries" -lt "${_node_max_r:-0}" ]]; then
                     python3 - "$state_file" "$state_tmp" "$node_id" "$(( _node_retries + 1 ))" <<'PYEOF'
 import json, os, sys
 from datetime import datetime, timezone

@@ -471,10 +471,19 @@ PYEOF
     log "Worker finished in ${duration}s (cost: ${cost_npt} NPT, turns: $turns, denials: $denials)"
     log "Result: $result"
 
-    # Fallback result.json if worker didn't write one
+    # Fallback result.json if worker claimed the task but didn't write one.
     local agent_result="$agent_dir/done/${task_id}.result.json"
+    local intent_in_inbox="$agent_dir/inbox/${task_id}.intent.json"
+    if [[ -f "$intent_in_inbox" && ! -f "$agent_result" ]]; then
+        err "KIT-DISPATCH-NO-LIFECYCLE: worker did not claim intent (still in inbox/)"
+        err "  Raw output preserved: $agent_dir/done/${task_id}.raw-output.json"
+        err "  Likely cause: kit-side dispatch bug, runtime crash before claim,"
+        err "  or malformed worker prompt. Investigate before retrying."
+        mv "$intent_in_inbox" "$agent_dir/done/${task_id}.unclaimed.intent.json"
+        return 1
+    fi
     if [[ ! -f "$agent_result" ]]; then
-        warn "Worker did not write result.json — generating fallback"
+        warn "Worker claimed intent but did not write result.json — generating fallback"
         local completed_at
         completed_at=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
         python3 - "$task_id" "$status_val" "$agent_id" "$created_at" "$completed_at" \

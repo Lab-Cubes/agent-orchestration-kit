@@ -5,6 +5,10 @@
 #   happy          (default) — exit 0, emit realistic stream-json response
 #   timeout        — exit 1, "timed out" on stderr, no stdout JSON
 #   error          — exit 0, stream-json with is_error=true
+#   no_claim       — exit 0 without claiming inbox or writing result.json
+#                    (used for dispatch no-lifecycle tests)
+#   claim_no_result — claim/archive intent but write no result.json
+#                    (used for fallback synthesis tests)
 #   slow           — sleeps 10s before emitting anything (for time_limit tests)
 #   budget_exceeded — emits an assistant event reporting 5M tokens then sleeps
 #                    (dispatcher kills it once it reads the token count)
@@ -32,25 +36,92 @@ fi
 
 MODE="${MOCK_CLAUDE_MODE:-happy}"
 
+_prompt_text_from_args() {
+    local prompt_text="" prev=""
+    for arg in "$@"; do
+        if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
+        prev="$arg"
+    done
+    printf '%s' "$prompt_text"
+}
+
+_load_task_context() {
+    PROMPT_TEXT="$(_prompt_text_from_args "$@")"
+    TASK_ID=$(echo "$PROMPT_TEXT" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1 || true)
+    local inbox_dir=""
+    inbox_dir=$(printf '%s\n' "$PROMPT_TEXT" | sed -n 's|.*ls \([^ ]*/inbox/\).*|\1|p' | head -1)
+    if [[ -n "$inbox_dir" ]]; then
+        MAILBOX_BASE="${inbox_dir%/inbox/}"
+    else
+        MAILBOX_BASE="."
+    fi
+}
+
+_claim_task() {
+    _load_task_context "$@"
+    [[ -n "${TASK_ID:-}" ]] || return 0
+    mkdir -p "$MAILBOX_BASE/active" "$MAILBOX_BASE/done"
+    if [[ -f "$MAILBOX_BASE/inbox/${TASK_ID}.intent.json" ]]; then
+        mv "$MAILBOX_BASE/inbox/${TASK_ID}.intent.json" "$MAILBOX_BASE/active/${TASK_ID}.intent.json"
+        mv "$MAILBOX_BASE/active/${TASK_ID}.intent.json" "$MAILBOX_BASE/done/${TASK_ID}.intent.json"
+    fi
+}
+
+_write_result() {
+    local status="$1" value="$2"
+    shift 2
+    _claim_task "$@"
+    [[ -n "${TASK_ID:-}" ]] || return 0
+    local error_json="null"
+    if [[ "$status" != "completed" ]]; then
+        error_json="\"$value\""
+    fi
+    cat > "$MAILBOX_BASE/done/${TASK_ID}.result.json" <<REOF
+{
+  "_ncp": 1, "type": "result", "value": "$value",
+  "probability": 1.0, "alternatives": [],
+  "payload": {
+    "_nop": 1, "schema_version": 1, "id": "$TASK_ID", "status": "$status",
+    "from": "urn:nps:agent:test.localhost:coder-01",
+    "picked_up_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:01:00Z",
+    "duration": 60, "cost_npt": 0,
+    "files_changed": [], "commits": [], "follow_up": [], "error": $error_json
+  }
+}
+REOF
+}
+
 case "$MODE" in
     happy)
+        _write_result "completed" "Mock worker completed task successfully." "$@"
         printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":1234,"output_tokens":567,"cache_creation_input_tokens":0,"cache_read_input_tokens":890}},"session_id":"mock"}\n'
         printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":1000,"duration_api_ms":900,"num_turns":5,"result":"Mock worker completed task successfully.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":1234,"output_tokens":567,"cache_creation_input_tokens":0,"cache_read_input_tokens":890},"permission_denials":[]}\n'
         exit 0
         ;;
+    no_claim)
+        exit 0
+        ;;
+    claim_no_result)
+        _claim_task "$@"
+        exit 0
+        ;;
     timeout)
+        _claim_task "$@"
         echo "Gateway agent failed: LLM request timed out. (timeout)" >&2
         exit 1
         ;;
     error)
+        _claim_task "$@"
         printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
         printf '{"type":"result","subtype":"error_during_execution","is_error":true,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"Mock error occurred during task execution.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
         exit 0
         ;;
     slow)
+        _claim_task "$@"
         sleep 10
         ;;
     budget_exceeded)
+        _claim_task "$@"
         # Report 5M input tokens in the first assistant event — any sane budget
         # cap will be exceeded on reading this. The dispatcher sends SIGTERM and
         # we never reach the sleep below.
@@ -58,6 +129,7 @@ case "$MODE" in
         sleep 10
         ;;
     cache_creation)
+        _claim_task "$@"
         # Emits non-zero cache_creation_input_tokens — test (a) concern #1.
         # input=1000, output=500, cache_creation=200, cache_read=0
         # Expected after fix: ceil((1000+500+200+0) * 1.05) = 1785
@@ -66,6 +138,7 @@ case "$MODE" in
         exit 0
         ;;
     rate_check)
+        _claim_task "$@"
         # Emits round-number tokens (native sum=1500) — test (b) concern #2.
         # Expected after fix: ceil(1500 * 1.05) = 1575; today (no rate): 1500
         printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":1000,"output_tokens":500,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
@@ -73,6 +146,7 @@ case "$MODE" in
         exit 0
         ;;
     sigint_handler)
+        _claim_task "$@"
         # Emits 5M tokens to trigger the dispatcher's budget kill, then handles
         # SIGINT by emitting a final result event — simulating real claude -p
         # graceful response (probed 2026-04-23: responds to SIGINT with result
@@ -113,21 +187,14 @@ PYEOF
         ;;
     scope_violation)
         # Writes a result.json with files_changed outside scope.
-        prompt_text=""
-        prev=""
-        for arg in "$@"; do
-            if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
-            prev="$arg"
-        done
-        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-z0-9_-]+' | head -1)
-        if [[ -n "$task_id" ]]; then
-            mkdir -p done
-            cat > "done/${task_id}.result.json" <<REOF
+        _claim_task "$@"
+        if [[ -n "${TASK_ID:-}" ]]; then
+            cat > "$MAILBOX_BASE/done/${TASK_ID}.result.json" <<REOF
 {
   "_ncp": 1, "type": "result", "value": "scope violation test",
   "probability": 1.0, "alternatives": [],
   "payload": {
-    "_nop": 1, "id": "$task_id", "status": "completed",
+    "_nop": 1, "id": "$TASK_ID", "status": "completed",
     "from": "urn:nps:agent:test.localhost:coder-01",
     "picked_up_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:01:00Z",
     "files_changed": ["/etc/shadow", "/tmp/outside-scope.txt"],
@@ -142,22 +209,15 @@ REOF
         ;;
     scope_clean)
         # Writes a result.json with files_changed inside scope.
-        prompt_text=""
-        prev=""
-        for arg in "$@"; do
-            if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
-            prev="$arg"
-        done
-        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-z0-9_-]+' | head -1)
+        _claim_task "$@"
         scope_dir="${MOCK_SCOPE_DIR:?MOCK_SCOPE_DIR must be set for scope_clean mode}"
-        if [[ -n "$task_id" ]]; then
-            mkdir -p done
-            cat > "done/${task_id}.result.json" <<REOF
+        if [[ -n "${TASK_ID:-}" ]]; then
+            cat > "$MAILBOX_BASE/done/${TASK_ID}.result.json" <<REOF
 {
   "_ncp": 1, "type": "result", "value": "scope clean test",
   "probability": 1.0, "alternatives": [],
   "payload": {
-    "_nop": 1, "id": "$task_id", "status": "completed",
+    "_nop": 1, "id": "$TASK_ID", "status": "completed",
     "from": "urn:nps:agent:test.localhost:coder-01",
     "picked_up_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:01:00Z",
     "files_changed": ["${scope_dir}/src/main.ts"],
@@ -171,6 +231,7 @@ REOF
         exit 0
         ;;
     commit_to_scope)
+        _claim_task "$@"
         # Prove the scope-escape attack: write a file into MOCK_COMMIT_DIR (a
         # non-git subdir inside an outer git repo) and commit. git traverses
         # parent dirs to find .git, so the commit lands on the outer repo's
@@ -184,6 +245,7 @@ REOF
         exit 0
         ;;
     commit_to_add_dir)
+        _claim_task "$@"
         # Post-fix isolation check: commit to the directory the dispatcher
         # actually passed via --add-dir, which after the fix is the worktree
         # subdir rather than the original outer-repo path. The commit lands
@@ -216,16 +278,9 @@ REOF
         # Writes a result.json missing required NOP fields (_ncp, payload._nop) to
         # done/ before exit — test #90. Mock still emits happy stdout so the
         # dispatch path runs to completion (status comes from our validation fix).
-        prompt_text=""
-        prev=""
-        for arg in "$@"; do
-            if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
-            prev="$arg"
-        done
-        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1)
-        if [[ -n "$task_id" ]]; then
-            mkdir -p done
-            printf '{"bad_field":"missing_required_ncp_and_payload"}' > "done/${task_id}.result.json"
+        _claim_task "$@"
+        if [[ -n "${TASK_ID:-}" ]]; then
+            printf '{"bad_field":"missing_required_ncp_and_payload"}' > "$MAILBOX_BASE/done/${TASK_ID}.result.json"
         fi
         printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
         printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"malformed result mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
@@ -234,21 +289,14 @@ REOF
     pushback)
         # Writes a result.json with status=blocked + pushback_reason=scope_insufficient.
         # Used by end_to_end.bats to test Decomposer re-invocation on worker pushback.
-        prompt_text=""
-        prev=""
-        for arg in "$@"; do
-            if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
-            prev="$arg"
-        done
-        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1)
-        if [[ -n "$task_id" ]]; then
-            mkdir -p done
-            cat > "done/${task_id}.result.json" <<REOF
+        _claim_task "$@"
+        if [[ -n "${TASK_ID:-}" ]]; then
+            cat > "$MAILBOX_BASE/done/${TASK_ID}.result.json" <<REOF
 {
   "_ncp": 1, "type": "result", "value": "Task blocked: scope insufficient",
   "probability": 0.0, "alternatives": [],
   "payload": {
-    "_nop": 1, "id": "$task_id", "status": "blocked",
+    "_nop": 1, "id": "$TASK_ID", "status": "blocked",
     "pushback_reason": "scope_insufficient",
     "from": "urn:nps:agent:example.com:coder-01",
     "picked_up_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:01:00Z",
@@ -263,23 +311,16 @@ REOF
         ;;
     malformed_result_invalid_json)
         # Writes truncated (invalid) JSON to result.json in done/ — test #90.
-        prompt_text=""
-        prev=""
-        for arg in "$@"; do
-            if [[ "$prev" == "-p" ]]; then prompt_text="$arg"; break; fi
-            prev="$arg"
-        done
-        task_id=$(echo "$prompt_text" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1)
-        if [[ -n "$task_id" ]]; then
-            mkdir -p done
-            printf '{"_ncp":1,' > "done/${task_id}.result.json"
+        _claim_task "$@"
+        if [[ -n "${TASK_ID:-}" ]]; then
+            printf '{"_ncp":1,' > "$MAILBOX_BASE/done/${TASK_ID}.result.json"
         fi
         printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
         printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"invalid json result mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
         exit 0
         ;;
     *)
-        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|scope_violation|scope_clean|commit_to_scope|commit_to_add_dir|malformed_result_missing_fields|malformed_result_invalid_json|pushback)" >&2
+        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|no_claim|claim_no_result|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|scope_violation|scope_clean|commit_to_scope|commit_to_add_dir|malformed_result_missing_fields|malformed_result_invalid_json|pushback)" >&2
         exit 2
         ;;
 esac
