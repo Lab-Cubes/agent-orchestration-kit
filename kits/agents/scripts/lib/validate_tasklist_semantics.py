@@ -23,6 +23,9 @@ PRIOR_VERSION_MISMATCH = "KIT-DECOMP-PRIOR-VERSION-MISMATCH"
 NODE_ID_DUPLICATE = "KIT-DECOMP-NODE-ID-DUPLICATE"
 EDGE_PHANTOM = "KIT-DECOMP-EDGE-PHANTOM"
 INPUT_FROM_PHANTOM = "KIT-DECOMP-INPUT-FROM-PHANTOM"
+AGENT_NOT_SET_UP = "KIT-DECOMP-AGENT-NOT-SET-UP"
+BUDGET_EXCESSIVE = "KIT-DECOMP-BUDGET-EXCESSIVE"
+SCOPE_EMPTY = "KIT-DECOMP-SCOPE-EMPTY"
 
 
 def _load_json(path: str) -> dict:
@@ -63,7 +66,28 @@ def _prior_version_id() -> int:
     return value
 
 
-def validate(data: dict, input_plan_id: str, prior_version_id: int) -> list[tuple[str, str]]:
+def _optional_positive_env(name: str) -> int | None:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        print(f"error: {name} must be an integer, got {raw!r}", file=sys.stderr)
+        sys.exit(2)
+    if value < 1:
+        print(f"error: {name} must be >= 1", file=sys.stderr)
+        sys.exit(2)
+    return value
+
+
+def validate(
+    data: dict,
+    input_plan_id: str,
+    prior_version_id: int,
+    max_budget_npt_per_node: int | None = None,
+    agents_home: str | None = None,
+) -> list[tuple[str, str]]:
     errors: list[tuple[str, str]] = []
 
     tasklist_plan_id = data.get("plan_id")
@@ -130,6 +154,42 @@ def validate(data: dict, input_plan_id: str, prior_version_id: int) -> list[tupl
                     f"node {node_id!r} input_from {upstream_id!r} references missing node id",
                 ))
 
+    if agents_home:
+        for node in nodes:
+            agent_urn = node.get("agent", "")
+            agent_id = agent_urn.rsplit(":", 1)[-1] if agent_urn else ""
+            if not agent_id:
+                continue
+            if not pathlib.Path(agents_home, agent_id).is_dir():
+                errors.append((
+                    AGENT_NOT_SET_UP,
+                    f"node {node.get('id')!r} agent {agent_id!r} not set up under {agents_home}",
+                ))
+
+    if max_budget_npt_per_node is not None:
+        for node in nodes:
+            budget_npt = node.get("budget_npt")
+            if isinstance(budget_npt, int) and budget_npt > max_budget_npt_per_node:
+                errors.append((
+                    BUDGET_EXCESSIVE,
+                    f"node {node.get('id')!r} budget_npt {budget_npt} exceeds "
+                    f"max_budget_npt_per_node {max_budget_npt_per_node}",
+                ))
+
+    for node in nodes:
+        scope = node.get("scope", [])
+        if not scope or any(s == "" for s in scope):
+            errors.append((
+                SCOPE_EMPTY,
+                f"node {node.get('id')!r} scope is empty or contains empty strings",
+            ))
+        if scope == ["."]:
+            print(
+                f"warning: node {node.get('id')!r} uses scope ['.'] "
+                "(broad scope; loses scope-narrowing benefits)",
+                file=sys.stderr,
+            )
+
     return errors
 
 
@@ -150,14 +210,18 @@ def _sample_tasklist(**overrides) -> dict:
     return data
 
 
-def _sample_node(node_id: str, input_from: list[str] | None = None) -> dict:
+def _sample_node(
+    node_id: str,
+    input_from: list[str] | None = None,
+    scope: list[str] | None = None,
+) -> dict:
     return {
         "id": node_id,
         "action": "act",
         "agent": "urn:nps:agent:test.localhost:coder-01",
         "input_from": input_from or [],
         "input_mapping": {},
-        "scope": ["."],
+        "scope": scope or ["src"],
         "budget_npt": 1000,
         "timeout_ms": 60000,
         "retry_policy": {"max_retries": 0, "backoff_ms": 0},
@@ -168,6 +232,15 @@ def _sample_node(node_id: str, input_from: list[str] | None = None) -> dict:
 
 def _self_test() -> None:
     assert validate(_sample_tasklist(), "plan-test-20260425-120000", 0) == []
+    with tempfile.TemporaryDirectory() as agents_home:
+        pathlib.Path(agents_home, "coder-01").mkdir()
+        assert validate(
+            _sample_tasklist(dag={"nodes": [_sample_node("node-1")], "edges": []}),
+            "plan-test-20260425-120000",
+            0,
+            max_budget_npt_per_node=200000,
+            agents_home=agents_home,
+        ) == []
 
     plan_errors = validate(_sample_tasklist(plan_id="wrong-plan"), "plan-test-20260425-120000", 0)
     assert plan_errors[0][0] == PLAN_MISMATCH, plan_errors
@@ -208,6 +281,39 @@ def _self_test() -> None:
     )
     assert input_from_errors[0][0] == INPUT_FROM_PHANTOM, input_from_errors
 
+    with tempfile.TemporaryDirectory() as agents_home:
+        agent_errors = validate(
+            _sample_tasklist(dag={"nodes": [_sample_node("node-1")], "edges": []}),
+            "plan-test-20260425-120000",
+            0,
+            agents_home=agents_home,
+        )
+        assert agent_errors[0][0] == AGENT_NOT_SET_UP, agent_errors
+
+    budget_errors = validate(
+        _sample_tasklist(dag={"nodes": [_sample_node("node-1")], "edges": []}),
+        "plan-test-20260425-120000",
+        0,
+        max_budget_npt_per_node=999,
+    )
+    assert budget_errors[0][0] == BUDGET_EXCESSIVE, budget_errors
+
+    empty_scope_node = _sample_node("node-1")
+    empty_scope_node["scope"] = []
+    scope_errors = validate(
+        _sample_tasklist(dag={"nodes": [empty_scope_node], "edges": []}),
+        "plan-test-20260425-120000",
+        0,
+    )
+    assert scope_errors[0][0] == SCOPE_EMPTY, scope_errors
+
+    dot_scope_errors = validate(
+        _sample_tasklist(dag={"nodes": [_sample_node("node-1", scope=["."])], "edges": []}),
+        "plan-test-20260425-120000",
+        0,
+    )
+    assert dot_scope_errors == [], dot_scope_errors
+
     with tempfile.NamedTemporaryFile("w", encoding="utf-8") as fh:
         json.dump(_sample_tasklist(), fh)
         fh.flush()
@@ -228,8 +334,12 @@ def main() -> None:
 
     input_plan_id = _required_env("INPUT_PLAN_ID")
     prior_version_id = _prior_version_id()
+    max_budget_npt_per_node = _optional_positive_env("MAX_BUDGET_NPT_PER_NODE")
+    agents_home = os.environ.get("NPS_AGENTS_HOME") or None
+    if agents_home is None:
+        print("warning: NPS_AGENTS_HOME unset; skipping agent existence check", file=sys.stderr)
     data = _load_json(sys.argv[1])
-    errors = validate(data, input_plan_id, prior_version_id)
+    errors = validate(data, input_plan_id, prior_version_id, max_budget_npt_per_node, agents_home)
     if errors:
         for code, message in errors:
             print(f"{code}:{message}", file=sys.stderr)

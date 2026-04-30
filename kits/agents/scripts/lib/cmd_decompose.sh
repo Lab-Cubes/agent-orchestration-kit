@@ -48,6 +48,13 @@ Semantic validation (kit invariants, enforced before DAG validation):
       → violation: KIT-DECOMP-EDGE-PHANTOM
   - dag.nodes[].input_from entries reference existing node ids
       → violation: KIT-DECOMP-INPUT-FROM-PHANTOM
+  - dag.nodes[].agent points at a set-up worker
+      → violation: KIT-DECOMP-AGENT-NOT-SET-UP
+  - dag.nodes[].budget_npt <= max_budget_npt_per_node
+      → violation: KIT-DECOMP-BUDGET-EXCESSIVE
+  - dag.nodes[].scope is non-empty and contains no empty strings
+      → violation: KIT-DECOMP-SCOPE-EMPTY
+  - dag.nodes[].scope == ["."] emits a stderr warning, not a violation
 
 Artifacts:
   task-lists/{plan-id}/pending/v{N}.json  — awaiting OSer ack (cmd_ack)
@@ -349,10 +356,28 @@ PYEOF
     rm -f "$schema_stderr_file"
 
     # --- Semantic identity validation (kit invariants) ---
+    local max_budget_npt_per_node
+    max_budget_npt_per_node=$(
+        python3 - "$CONFIG_FILE" <<'PYEOF'
+import json, os, sys
+config_file = sys.argv[1]
+default = 200000
+if config_file and os.path.isfile(config_file):
+    try:
+        value = json.load(open(config_file)).get("max_budget_npt_per_node", default)
+    except Exception:
+        value = default
+else:
+    value = default
+print(value)
+PYEOF
+    )
     local semantics_stderr_file
     semantics_stderr_file=$(mktemp)
     local semantics_exit=0
     INPUT_PLAN_ID="$plan_id" PRIOR_VERSION_ID="$prior_version_id" \
+        MAX_BUDGET_NPT_PER_NODE="$max_budget_npt_per_node" \
+        NPS_AGENTS_HOME="$NPS_AGENTS_HOME" \
         python3 "$NPS_DIR/scripts/lib/validate_tasklist_semantics.py" "$tmp_output" \
         >/dev/null 2>"$semantics_stderr_file" || semantics_exit=$?
     if [[ "$semantics_exit" -ne 0 ]]; then
@@ -363,7 +388,7 @@ PYEOF
 import sys
 for line in open(sys.argv[1]):
     line = line.strip()
-    if line:
+    if line and not line.startswith("warning:"):
         print(line.split(':', 1)[0])
         break
 else:
@@ -378,6 +403,7 @@ PYEOF
         _append_decompose_event "decomposer_failed" "$semantic_reason" "null"
         exit 1
     fi
+    while IFS= read -r line; do err "  semantic: $line"; done < "$semantics_stderr_file"
     rm -f "$semantics_stderr_file"
 
     # --- NOP DAG validation (NPS-5 §3.1.1) ---

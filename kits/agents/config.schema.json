@@ -8,6 +8,7 @@
     "issuer_agent_id": {"type": "string", "minLength": 1},
     "default_capabilities": {"type": "array", "items": {"type": "string"}},
     "default_budget_npt": {"type": "integer", "minimum": 1},
+    "max_budget_npt_per_node": {"type": "integer", "minimum": 1},
     "category_budget_npt": {
       "type": "object",
       "patternProperties": {

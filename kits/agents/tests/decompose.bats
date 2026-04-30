@@ -34,6 +34,8 @@ setup() {
 
     NPS_TASKLISTS_HOME="$KIT_TMPDIR/task-lists"
     export NPS_TASKLISTS_HOME
+
+    run_spawner setup coder-01 coder
 }
 
 teardown() {
@@ -122,6 +124,14 @@ elif semantic_variant == "edge_phantom":
     edges.append({"from": "node-0", "to": "node-missing"})
 elif semantic_variant == "input_from_phantom" and nodes:
     nodes[0]["input_from"] = ["node-missing"]
+elif semantic_variant == "agent_not_set_up" and nodes:
+    nodes[0]["agent"] = "urn:nps:agent:test.localhost:missing-01"
+elif semantic_variant == "budget_excessive" and nodes:
+    nodes[0]["budget_npt"] = 200001
+elif semantic_variant == "scope_empty" and nodes:
+    nodes[0]["scope"] = []
+elif semantic_variant == "scope_dot" and nodes:
+    nodes[0]["scope"] = ["."]
 
 json.dump({
     "_ncp": 1, "type": "task_list", "schema_version": 1,
@@ -181,6 +191,10 @@ _require_jsonschema() {
     echo "$output" | grep -q "KIT-DECOMP-NODE-ID-DUPLICATE"
     echo "$output" | grep -q "KIT-DECOMP-EDGE-PHANTOM"
     echo "$output" | grep -q "KIT-DECOMP-INPUT-FROM-PHANTOM"
+    echo "$output" | grep -q "KIT-DECOMP-AGENT-NOT-SET-UP"
+    echo "$output" | grep -q "KIT-DECOMP-BUDGET-EXCESSIVE"
+    echo "$output" | grep -q "KIT-DECOMP-SCOPE-EMPTY"
+    echo "$output" | grep -q "scope == \\[\"\\.\"\\]"
 }
 
 # ---------------------------------------------------------------------------
@@ -585,7 +599,141 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 16 — DAG-cycle (node-0 → node-1 → node-0)
+# 16 — Semantic validation: agent references missing worker
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: agent not set up exits 1 with KIT-DECOMP-AGENT-NOT-SET-UP" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/agent-not-set-up.json"
+    _write_mock_task_list "$semantic_file" 1 false "$PLAN_ID" 1 null agent_not_set_up
+
+    cat > "$KIT_TMPDIR/agent-not-set-up.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/agent-not-set-up.py"
+    _override_decomposer "python3 $KIT_TMPDIR/agent-not-set-up.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-AGENT-NOT-SET-UP", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 17 — Semantic validation: budget exceeds max_budget_npt_per_node
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: budget excessive exits 1 with KIT-DECOMP-BUDGET-EXCESSIVE" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/budget-excessive.json"
+    _write_mock_task_list "$semantic_file" 1 false "$PLAN_ID" 1 null budget_excessive
+
+    cat > "$KIT_TMPDIR/budget-excessive.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/budget-excessive.py"
+    _override_decomposer "python3 $KIT_TMPDIR/budget-excessive.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-BUDGET-EXCESSIVE", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 18 — Semantic validation: empty scope
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: empty scope exits 1 with KIT-DECOMP-SCOPE-EMPTY" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/scope-empty.json"
+    _write_mock_task_list "$semantic_file" 1 false "$PLAN_ID" 1 null scope_empty
+
+    cat > "$KIT_TMPDIR/scope-empty.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/scope-empty.py"
+    _override_decomposer "python3 $KIT_TMPDIR/scope-empty.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-SCOPE-EMPTY", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 19 — Semantic validation: scope "." warning only
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: scope ['.'] passes with stderr warning" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/scope-dot.json"
+    _write_mock_task_list "$semantic_file" 1 false "$PLAN_ID" 1 null scope_dot
+
+    cat > "$KIT_TMPDIR/scope-dot.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/scope-dot.py"
+    _override_decomposer "python3 $KIT_TMPDIR/scope-dot.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 0 ]
+    [ -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+    echo "$output" | grep -q "warning: node 'node-0' uses scope \\['\\.'\\]"
+}
+
+# ---------------------------------------------------------------------------
+# 20 — DAG-cycle (node-0 → node-1 → node-0)
 # ---------------------------------------------------------------------------
 
 @test "DAG-cycle: exits 1, decomposer_failed/NOP-TASK-DAG-CYCLE event" {
@@ -621,7 +769,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 17 — Pushback path: trivial decomposer refuses re-emission, escalates
+# 21 — Pushback path: trivial decomposer refuses re-emission, escalates
 # ---------------------------------------------------------------------------
 
 @test "pushback path: prior_version=1 causes trivial decomposer refusal, decomposer_failed/pushback_unsupported event" {
@@ -647,7 +795,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 18 — Config override: custom decomposer_cmd used
+# 22 — Config override: custom decomposer_cmd used
 # ---------------------------------------------------------------------------
 
 @test "config override: custom decomposer_cmd in config.json is used" {
