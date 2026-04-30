@@ -115,7 +115,13 @@ export interface Mailbox {
 export interface TaskContext {
   files?: string[];
   knowledge?: string[];
+  spec_refs?: SpecRef[];
   branch?: string;
+}
+
+export interface SpecRef {
+  url: string;
+  role: "dod" | "context" | "prior_art";
 }
 
 export interface TaskConstraints {
@@ -159,6 +165,8 @@ export type ContextCapacity = "fresh" | "half" | "tight" | "imminent";
 
 export interface NopResultPayload {
   _nop: NopVersion;
+  /** Payload schema discriminator for v1/v2 result-shape coexistence. */
+  schema_version: 1;
   id: string;
   /**
    * Back-pointer to the originating plan. @see architecture.md §4.5

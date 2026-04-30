@@ -68,6 +68,7 @@ const result: ResultMessage = {
   alternatives: [],
   payload: {
     _nop: 1,
+    schema_version: 1,
     id: taskId,
     status: "completed",
     from: buildNid("agent", ISSUER_DOMAIN, AGENT_ID),

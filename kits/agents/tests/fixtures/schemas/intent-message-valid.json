@@ -1,0 +1,43 @@
+{
+  "_ncp": 1,
+  "type": "intent",
+  "intent": "implement-schema-update",
+  "confidence": 0.95,
+  "payload": {
+    "_nop": 1,
+    "id": "task-sage-20260430-120000",
+    "plan_id": "plan-example.com-20260430-120000",
+    "from": "urn:nps:agent:example.com:sage",
+    "to": "urn:nps:agent:example.com:coder-01",
+    "created_at": "2026-04-30T12:00:00.000Z",
+    "priority": "normal",
+    "category": "code",
+    "mailbox": {
+      "base": "./"
+    },
+    "context": {
+      "files": ["kits/agents/src/nop-types.ts"],
+      "knowledge": ["Issue body requested typed spec references."],
+      "spec_refs": [
+        {
+          "url": "https://github.com/Lab-Cubes/agent-orchestration-kit/issues/130",
+          "role": "dod"
+        },
+        {
+          "url": "https://github.com/Lab-Cubes/agent-orchestration-kit/pull/136",
+          "role": "prior_art"
+        }
+      ],
+      "branch": "main"
+    },
+    "constraints": {
+      "model": "sonnet",
+      "time_limit": 900,
+      "scope": ["kits/agents/src/nop-types.ts"],
+      "budget_npt": 40000
+    },
+    "success_criteria": {
+      "tests": ["npm run typecheck"]
+    }
+  }
+}
