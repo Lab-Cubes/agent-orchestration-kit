@@ -154,8 +154,9 @@ assert 'value' in d
 assert 'probability' in d
 p = d['payload']
 assert p['_nop'] == 1
+assert p['schema_version'] == 1
 assert 'id' in p
-assert p['status'] in ('completed','failed','timeout','blocked','cancelled')
+assert p['status'] in ('completed','failed','timeout','blocked')
 assert 'from' in p
 assert 'picked_up_at' in p
 assert 'completed_at' in p
@@ -239,6 +240,17 @@ HOOK
 
     run_spawner setup coder-01 coder
     run_spawner dispatch coder-01 "malformed result" --category code --time-limit 60
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
+    [ "$status_field" = "error" ]
+}
+
+@test "#180 result.json: worker-written result missing schema_version surfaces error status" {
+    export MOCK_CLAUDE_MODE=malformed_result_missing_schema_version
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "missing schema version result" --category code --time-limit 60
 
     local status_field
     status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')

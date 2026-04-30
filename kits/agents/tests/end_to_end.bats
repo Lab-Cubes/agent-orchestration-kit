@@ -254,7 +254,7 @@ print('ok')
     # result.json with plan_id so merge-hold check is triggered
     cat > "$KIT_AGENTS/coder-01/done/${task_id}.result.json" <<EOF
 {"_ncp":1,"type":"result","value":"done","probability":1.0,"alternatives":[],
- "payload":{"plan_id":"$plan_id","_nop":1,"id":"$task_id","status":"completed",
+ "payload":{"plan_id":"$plan_id","_nop":1,"schema_version":1,"id":"$task_id","status":"completed",
   "from":"urn:nps:agent:example.com:coder-01",
   "picked_up_at":"2026-01-01T00:00:00Z","completed_at":"2026-01-01T00:01:00Z"}}
 EOF

@@ -90,8 +90,9 @@ task-list node for `dispatch-tasklist` intents.
   "alternatives": [],
   "payload": {
     "_nop": 1,
+    "schema_version": 1,
     "id": "<same as intent payload.id>",
-    "status": "completed | failed | timeout | blocked | cancelled",
+    "status": "completed | failed | timeout | blocked",
     "from": "urn:nps:agent:{issuer_domain}:{worker_id}",
     "picked_up_at": "2026-04-18T10:42:50.000Z",
     "completed_at": "2026-04-18T10:43:32.000Z",

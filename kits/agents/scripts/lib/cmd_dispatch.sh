@@ -503,6 +503,7 @@ result = {
     "alternatives": [],
     "payload": {
         "_nop": 1,
+        "schema_version": 1,
         "id": task_id,
         "status": "completed" if status_val == "success" else ("timeout" if stop == "time_limit" else "failed"),
         "from": f"urn:nps:agent:{issuer_domain}:{agent_id}",
@@ -548,7 +549,8 @@ expected_from = os.environ['EXPECTED_FROM']
 try:
     d = json.load(open(path))
     p = d.get('payload', {})
-    assert '_ncp' in d and 'payload' in d and '_nop' in p
+    assert d.get('_ncp') == 1 and d.get('type') == 'result'
+    assert p.get('_nop') == 1 and p.get('schema_version') == 1
 except Exception:
     sys.exit(1)
 
