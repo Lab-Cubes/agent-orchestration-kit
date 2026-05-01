@@ -208,6 +208,84 @@ print('ok')
     [ "$status_field" = "error" ]
 }
 
+@test "#205 result.json: mismatched payload.id surfaces error status" {
+    export MOCK_CLAUDE_MODE=result_mismatched_id
+
+    cat > "$KIT_HOOKS/on-task-completed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/completed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-completed.sh"
+    cat > "$KIT_HOOKS/on-task-failed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/failed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-failed.sh"
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "mismatched result id" --category code --time-limit 60
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "RESULT IDENTITY MISMATCH"
+    echo "$output" | grep -q "payload.id"
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
+    [ "$status_field" = "error" ]
+    [ ! -f "$KIT_TMPDIR/completed-hook-fired" ]
+    [ -f "$KIT_TMPDIR/failed-hook-fired" ]
+
+    local result_file
+    result_file=$(ls "$KIT_AGENTS/coder-01/done/"*.result.json 2>/dev/null | head -1)
+    run python3 - "$result_file" <<'PYEOF'
+import json, sys
+p = json.load(open(sys.argv[1]))["payload"]
+assert p["status"] == "failed", p
+assert "payload.id" in p["error"], p
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+@test "#205 result.json: mismatched payload.from surfaces error status" {
+    export MOCK_CLAUDE_MODE=result_mismatched_sender
+
+    cat > "$KIT_HOOKS/on-task-completed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/completed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-completed.sh"
+    cat > "$KIT_HOOKS/on-task-failed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/failed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-failed.sh"
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "mismatched result sender" --category code --time-limit 60
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "RESULT IDENTITY MISMATCH"
+    echo "$output" | grep -q "payload.from"
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
+    [ "$status_field" = "error" ]
+    [ ! -f "$KIT_TMPDIR/completed-hook-fired" ]
+    [ -f "$KIT_TMPDIR/failed-hook-fired" ]
+
+    local result_file
+    result_file=$(ls "$KIT_AGENTS/coder-01/done/"*.result.json 2>/dev/null | head -1)
+    run python3 - "$result_file" <<'PYEOF'
+import json, sys
+p = json.load(open(sys.argv[1]))["payload"]
+assert p["status"] == "failed", p
+assert "payload.from" in p["error"], p
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # Sequential dispatch uniqueness
 # ---------------------------------------------------------------------------

@@ -533,15 +533,51 @@ open(path, 'w').write(json.dumps(d, indent=2) + '\n')
 PYEOF
     fi
 
-    # --- result.json validation (#90): reject worker-written malformed files ---
-    RESULT_PATH="$agent_result" python3 -c "
+    # --- result.json validation (#90/#205): reject malformed or mis-bound files ---
+    local result_validation_error=""
+    local expected_result_from="urn:nps:agent:${ISSUER_DOMAIN}:${agent_id}"
+    if ! result_validation_error=$(RESULT_PATH="$agent_result" EXPECTED_TASK_ID="$task_id" EXPECTED_FROM="$expected_result_from" python3 - <<'PYEOF' 2>/dev/null
 import json, os, sys
 try:
     d = json.load(open(os.environ['RESULT_PATH']))
-    assert '_ncp' in d and 'payload' in d and '_nop' in d.get('payload', {})
+    assert d.get('_ncp') == 1 and d.get('type') == 'result'
+    p = d.get('payload', {})
+    assert p.get('_nop') == 1
 except Exception:
+    print("result.json invalid or missing required fields")
     sys.exit(1)
-" 2>/dev/null || { warn "result.json invalid or missing required fields — marking error"; status_val="error"; }
+expected_task_id = os.environ['EXPECTED_TASK_ID']
+expected_from = os.environ['EXPECTED_FROM']
+errors = []
+if p.get('id') != expected_task_id:
+    errors.append(f"payload.id={p.get('id')!r} expected {expected_task_id!r}")
+if p.get('from') != expected_from:
+    errors.append(f"payload.from={p.get('from')!r} expected {expected_from!r}")
+if errors:
+    print("RESULT IDENTITY MISMATCH: " + "; ".join(errors))
+    sys.exit(1)
+PYEOF
+    ); then
+        status_val="error"
+        if [[ -n "$result_validation_error" ]]; then
+            while IFS= read -r validation_line; do
+                [[ -n "$validation_line" ]] && warn "$validation_line"
+            done <<< "$result_validation_error"
+        else
+            warn "result.json invalid or missing required fields"
+        fi
+        RESULT_FILE="$agent_result" VALIDATION_ERROR="${result_validation_error:-result.json invalid or missing required fields}" python3 - <<'PYEOF' 2>/dev/null || true
+import json, os
+path = os.environ['RESULT_FILE']
+d = json.load(open(path))
+p = d.setdefault('payload', {})
+p['status'] = 'failed'
+existing = p.get('error')
+msg = os.environ['VALIDATION_ERROR']
+p['error'] = f"{existing} {msg}".strip() if existing else msg
+open(path, 'w').write(json.dumps(d, indent=2) + '\n')
+PYEOF
+    fi
 
     # --- Scope validation (#34): reject files_changed outside constraints.scope ---
     if [[ -n "$original_scope" && -f "$agent_result" ]]; then
