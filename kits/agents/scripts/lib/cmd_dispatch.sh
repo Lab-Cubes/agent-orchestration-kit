@@ -474,11 +474,15 @@ PYEOF
     # Fallback result.json if worker claimed the task but didn't write one.
     local agent_result="$agent_dir/done/${task_id}.result.json"
     local intent_in_inbox="$agent_dir/inbox/${task_id}.intent.json"
-    if [[ -f "$intent_in_inbox" && ! -f "$agent_result" ]]; then
+    if [[ -f "$intent_in_inbox" ]]; then
         err "KIT-DISPATCH-NO-LIFECYCLE: worker did not claim intent (still in inbox/)"
         err "  Raw output preserved: $agent_dir/done/${task_id}.raw-output.json"
         err "  Likely cause: kit-side dispatch bug, runtime crash before claim,"
         err "  or malformed worker prompt. Investigate before retrying."
+        if [[ -f "$agent_result" ]]; then
+            err "  Result ignored: worker wrote result.json without claiming the intent."
+            mv "$agent_result" "$agent_dir/done/${task_id}.unclaimed.result.json"
+        fi
         mv "$intent_in_inbox" "$agent_dir/done/${task_id}.unclaimed.intent.json"
         return 1
     fi
