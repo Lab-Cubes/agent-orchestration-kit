@@ -60,7 +60,7 @@ Next agent dispatch will post to Discord.
 | Event | Message format |
 |-------|----------------|
 | `task-claimed`   | `🔨 {account} claimed {task_id}` |
-| `task-completed` | `✅ {account} completed {task_id} ({cost_npt} NPT)` |
+| `task-completed` | `✅ {account} completed {task_id} ({cost_cgn} CGN)` |
 | `task-failed`    | `❌ {account} failed {task_id}` |
 
 All messages suppressed if `channel_id` is empty or no token can be resolved — safe fallback.
@@ -85,7 +85,7 @@ This plugin is a worked example of the kit's hook contract. See
 `kits/agents/hooks/README.md` for the full contract. The pattern:
 
 1. Script reads relevant config from its own dir
-2. Script reads `NPS_TASK_ID` / `NPS_AGENT_ID` / `NPS_STATUS` / `NPS_COST_NPT` env vars
+2. Script reads `NPS_TASK_ID` / `NPS_AGENT_ID` / `NPS_STATUS` / `NPS_COST_CGN` env vars
 3. Script does its thing (Slack post, webhook POST, metric emit, etc.)
 4. `install.sh` copies or symlinks the scripts into `kits/agents/hooks/`
 

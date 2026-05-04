@@ -74,7 +74,7 @@ Every task arrives as an `.intent.json` file in `inbox/`:
       "model": "haiku|sonnet|opus",
       "time_limit": 900,
       "scope": ["dirs/files I may touch"],
-      "budget_npt": 20000
+      "budget_cgn": 20000
     }
   }
 }
@@ -87,7 +87,7 @@ Every task arrives as an `.intent.json` file in `inbox/`:
 | `constraints.model` | Use specified model if different from my default |
 | `constraints.scope` | **Narrow only** — MUST NOT expand (NPS-5 §3.2 scope principle) |
 | `constraints.time_limit` | Hard stop — write timeout result if exceeded |
-| `constraints.budget_npt` | NPT cap for this task (NPS-0 §4.3) |
+| `constraints.budget_cgn` | CGN cap for this task (NPS-Release token-budget.md) |
 
 `constraints.scope` is literal for edits. Test files, fixtures, snapshots, and
 generated files are editable only when they are explicitly listed in scope.
@@ -127,7 +127,7 @@ When done, write `done/{id}.result.json`:
     "picked_up_at": "ISO 8601 UTC",
     "completed_at": "ISO 8601 UTC",
     "duration": 42,
-    "cost_npt": 8421,
+    "cost_cgn": 8421,
     "context_capacity": "fresh | half | tight | imminent",
     "files_changed": ["list of files I modified"],
     "commits": ["abc123 — short commit message"],

@@ -24,9 +24,9 @@
   },
 
   "messages": {
-    "$comment": "Optional: override message templates. {account}, {task_id}, {cost_npt} are substituted.",
+    "$comment": "Optional: override message templates. {account}, {task_id}, {cost_cgn} are substituted.",
     "task_claimed":   "🔨 {account} claimed {task_id}",
-    "task_completed": "✅ {account} completed {task_id} ({cost_npt} NPT)",
+    "task_completed": "✅ {account} completed {task_id} ({cost_cgn} CGN)",
     "task_failed":    "❌ {account} failed {task_id}"
   }
 }
