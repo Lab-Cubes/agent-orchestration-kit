@@ -8,7 +8,7 @@
 # TODO(#66): Once the Decomposer is complete, add tests that drive the full
 # Plan → Decompose → ack → dispatch-tasklist pipeline end-to-end.
 #
-# Hard cap: 11 test cases.
+# Hard cap: 12 test cases.
 
 load 'helpers/build-kit-tree.bash'
 
@@ -444,7 +444,38 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 11. Host agent refs unchanged by dispatch-tasklist runs
+# 11. Empty DAG: exit 2, no workers spawned
+# ---------------------------------------------------------------------------
+
+@test "empty DAG task-list: exits 2, no intent files written" {
+    local tl_dir="$NPS_TASKLISTS_HOME/plan-empty"
+    mkdir -p "$tl_dir"
+    python3 - "$FIXTURES_DIR/single-task.json" "$tl_dir/v1.json" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+d["plan_id"] = "plan-empty"
+d["dag"]["nodes"] = []
+d["dag"]["edges"] = []
+with open(sys.argv[2], "w") as f:
+    json.dump(d, f, indent=2)
+    f.write("\n")
+PYEOF
+
+    run run_dt plan-empty
+    [ "$status" -eq 2 ]
+    echo "$output" | grep -q "task-list DAG has no nodes"
+
+    local total=0
+    for worker in coder-01 coder-02 coder-03; do
+        local n
+        n=$(find "$KIT_AGENTS/$worker/inbox" -maxdepth 1 -name '*.intent.json' 2>/dev/null | wc -l)
+        total=$(( total + n ))
+    done
+    [ "$total" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 12. Host agent refs unchanged by dispatch-tasklist runs
 # ---------------------------------------------------------------------------
 
 @test "host agent refs unchanged by dispatch-tasklist runs" {

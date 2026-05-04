@@ -26,6 +26,7 @@ INPUT_FROM_PHANTOM = "KIT-DECOMP-INPUT-FROM-PHANTOM"
 AGENT_NOT_SET_UP = "KIT-DECOMP-AGENT-NOT-SET-UP"
 BUDGET_EXCESSIVE = "KIT-DECOMP-BUDGET-EXCESSIVE"
 SCOPE_EMPTY = "KIT-DECOMP-SCOPE-EMPTY"
+DAG_EMPTY = "KIT-DECOMP-DAG-EMPTY"
 
 
 def _load_json(path: str) -> dict:
@@ -115,6 +116,12 @@ def validate(
     dag = data.get("dag", {})
     nodes = dag.get("nodes", [])
     edges = dag.get("edges", [])
+
+    if not nodes:
+        errors.append((
+            DAG_EMPTY,
+            "dag.nodes must contain at least one task node",
+        ))
 
     seen_node_ids: set[str] = set()
     duplicate_node_ids: set[str] = set()
@@ -231,7 +238,9 @@ def _sample_node(
 
 
 def _self_test() -> None:
-    assert validate(_sample_tasklist(), "plan-test-20260425-120000", 0) == []
+    empty_dag_errors = validate(_sample_tasklist(), "plan-test-20260425-120000", 0)
+    assert empty_dag_errors[0][0] == DAG_EMPTY, empty_dag_errors
+
     with tempfile.TemporaryDirectory() as agents_home:
         pathlib.Path(agents_home, "coder-01").mkdir()
         assert validate(

@@ -189,6 +189,7 @@ _require_jsonschema() {
     echo "$output" | grep -q "KIT-DECOMP-VERSION-MISMATCH"
     echo "$output" | grep -q "KIT-DECOMP-PRIOR-VERSION-MISMATCH"
     echo "$output" | grep -q "KIT-DECOMP-NODE-ID-DUPLICATE"
+    echo "$output" | grep -q "KIT-DECOMP-DAG-EMPTY"
     echo "$output" | grep -q "KIT-DECOMP-EDGE-PHANTOM"
     echo "$output" | grep -q "KIT-DECOMP-INPUT-FROM-PHANTOM"
     echo "$output" | grep -q "KIT-DECOMP-AGENT-NOT-SET-UP"
@@ -383,7 +384,43 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 10 — Semantic validation: plan_id mismatch
+# 10 — Semantic validation: empty DAG
+# ---------------------------------------------------------------------------
+
+@test "semantic validation: empty DAG exits 1 with KIT-DECOMP-DAG-EMPTY" {
+    _require_jsonschema
+
+    local semantic_file="$KIT_TMPDIR/empty-dag.json"
+    _write_mock_task_list "$semantic_file" 0
+
+    cat > "$KIT_TMPDIR/empty-dag.py" <<PYEOF
+#!/usr/bin/env python3
+print(open('$semantic_file').read())
+PYEOF
+    chmod +x "$KIT_TMPDIR/empty-dag.py"
+    _override_decomposer "python3 $KIT_TMPDIR/empty-dag.py"
+
+    local fixture
+    fixture=$(_write_fixture)
+    run run_decompose_from "$fixture"
+
+    [ "$status" -eq 1 ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+
+    local ev
+    ev=$(_last_event)
+    run python3 - "$ev" <<'PYEOF'
+import json, sys
+ev = json.loads(sys.argv[1])
+assert ev["dispatcher_acted"] == "decomposer_failed", ev
+assert ev["pushback_reason"] == "KIT-DECOMP-DAG-EMPTY", ev
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 11 — Semantic validation: plan_id mismatch
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: plan_id mismatch exits 1 with KIT-DECOMP-PLAN-MISMATCH" {
@@ -419,7 +456,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 11 — Semantic validation: version_id mismatch
+# 12 — Semantic validation: version_id mismatch
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: version_id mismatch exits 1 with KIT-DECOMP-VERSION-MISMATCH" {
@@ -455,7 +492,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 12 — Semantic validation: prior_version mismatch
+# 13 — Semantic validation: prior_version mismatch
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: prior_version mismatch exits 1 with KIT-DECOMP-PRIOR-VERSION-MISMATCH" {
@@ -491,7 +528,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 13 — Semantic validation: duplicate node id
+# 14 — Semantic validation: duplicate node id
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: duplicate node id exits 1 with KIT-DECOMP-NODE-ID-DUPLICATE" {
@@ -527,7 +564,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 14 — Semantic validation: edge references missing node id
+# 15 — Semantic validation: edge references missing node id
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: phantom edge exits 1 with KIT-DECOMP-EDGE-PHANTOM" {
@@ -563,7 +600,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 15 — Semantic validation: input_from references missing node id
+# 16 — Semantic validation: input_from references missing node id
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: phantom input_from exits 1 with KIT-DECOMP-INPUT-FROM-PHANTOM" {
@@ -599,7 +636,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 16 — Semantic validation: agent references missing worker
+# 17 — Semantic validation: agent references missing worker
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: agent not set up exits 1 with KIT-DECOMP-AGENT-NOT-SET-UP" {
@@ -635,7 +672,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 17 — Semantic validation: budget exceeds max_budget_npt_per_node
+# 18 — Semantic validation: budget exceeds max_budget_npt_per_node
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: budget excessive exits 1 with KIT-DECOMP-BUDGET-EXCESSIVE" {
@@ -671,7 +708,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 18 — Semantic validation: empty scope
+# 19 — Semantic validation: empty scope
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: empty scope exits 1 with KIT-DECOMP-SCOPE-EMPTY" {
@@ -707,7 +744,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 19 — Semantic validation: scope "." warning only
+# 20 — Semantic validation: scope "." warning only
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: scope ['.'] passes with stderr warning" {
@@ -733,7 +770,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 20 — DAG-cycle (node-0 → node-1 → node-0)
+# 21 — DAG-cycle (node-0 → node-1 → node-0)
 # ---------------------------------------------------------------------------
 
 @test "DAG-cycle: exits 1, decomposer_failed/NOP-TASK-DAG-CYCLE event" {

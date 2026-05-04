@@ -219,6 +219,27 @@ PYEOF
     [ "$status" -eq 0 ]
 }
 
+@test "approve: empty DAG is rejected before rename" {
+    _write_pending 1
+    python3 - "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+d = json.load(open(path))
+d["dag"]["nodes"] = []
+d["dag"]["edges"] = []
+with open(path, "w") as f:
+    json.dump(d, f, indent=2)
+    f.write("\n")
+PYEOF
+
+    run run_ack "$PLAN_ID" 1
+
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "task-list DAG has no nodes"
+    [ -f "$NPS_TASKLISTS_HOME/$PLAN_ID/pending/v1.json" ]
+    [ ! -f "$NPS_TASKLISTS_HOME/$PLAN_ID/v1.json" ]
+}
+
 @test "approve: prior_version from task-list when set" {
     _write_pending 2 1
 
