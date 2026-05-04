@@ -537,15 +537,18 @@ open(path, 'w').write(json.dumps(d, indent=2) + '\n')
 PYEOF
     fi
 
-    # --- result.json validation (#90): reject worker-written malformed files ---
-    RESULT_PATH="$agent_result" python3 -c "
+    # --- result.json validation (#90, #205): reject malformed or unbound files ---
+    RESULT_PATH="$agent_result" TASK_ID="$task_id" EXPECTED_FROM="urn:nps:agent:${ISSUER_DOMAIN}:${agent_id}" python3 -c "
 import json, os, sys
 try:
     d = json.load(open(os.environ['RESULT_PATH']))
-    assert '_ncp' in d and 'payload' in d and '_nop' in d.get('payload', {})
+    p = d.get('payload', {})
+    assert '_ncp' in d and 'payload' in d and '_nop' in p
+    assert p.get('id') == os.environ['TASK_ID']
+    assert p.get('from') == os.environ['EXPECTED_FROM']
 except Exception:
     sys.exit(1)
-" 2>/dev/null || { warn "result.json invalid or missing required fields — marking error"; status_val="error"; }
+" 2>/dev/null || { warn "result.json invalid, missing required fields, or not bound to dispatched task/worker — marking error"; status_val="error"; }
 
     # --- Scope validation (#34): reject files_changed outside constraints.scope ---
     if [[ -n "$original_scope" && -f "$agent_result" ]]; then

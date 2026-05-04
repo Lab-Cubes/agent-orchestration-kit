@@ -21,6 +21,8 @@
 #   commit_to_add_dir — parses its own argv for the --add-dir value and commits
 #                    there. Used to verify post-fix isolation: the commit must
 #                    land on the worktree branch, not on the outer repo's HEAD.
+#   mismatched_result_id — writes result.json with payload.id for another task
+#   mismatched_result_from — writes result.json with payload.from for another worker
 #
 # If MOCK_CLAUDE_ARGS_FILE is set, all received args are appended there
 # so tests can assert which flags the spawner passed.
@@ -309,6 +311,52 @@ REOF
         printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"malformed result mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
         exit 0
         ;;
+    mismatched_result_id)
+        # Writes an otherwise valid result.json whose payload.id is not the
+        # dispatched task id — issue #205.
+        _claim_task "$@"
+        if [[ -n "${TASK_ID:-}" ]]; then
+            cat > "$MAILBOX_BASE/done/${TASK_ID}.result.json" <<REOF
+{
+  "_ncp": 1, "type": "result", "value": "mismatched id test",
+  "probability": 1.0, "alternatives": [],
+  "payload": {
+    "_nop": 1, "schema_version": 1, "id": "${TASK_ID}-other", "status": "completed",
+    "from": "urn:nps:agent:test.localhost:coder-01",
+    "picked_up_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:01:00Z",
+    "duration": 60, "cost_npt": 0,
+    "files_changed": [], "commits": [], "follow_up": [], "error": null
+  }
+}
+REOF
+        fi
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"mismatched result id mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
+    mismatched_result_from)
+        # Writes an otherwise valid result.json whose payload.from is not the
+        # dispatched worker NID — issue #205.
+        _claim_task "$@"
+        if [[ -n "${TASK_ID:-}" ]]; then
+            cat > "$MAILBOX_BASE/done/${TASK_ID}.result.json" <<REOF
+{
+  "_ncp": 1, "type": "result", "value": "mismatched sender test",
+  "probability": 1.0, "alternatives": [],
+  "payload": {
+    "_nop": 1, "schema_version": 1, "id": "$TASK_ID", "status": "completed",
+    "from": "urn:nps:agent:test.localhost:critic-01",
+    "picked_up_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:01:00Z",
+    "duration": 60, "cost_npt": 0,
+    "files_changed": [], "commits": [], "follow_up": [], "error": null
+  }
+}
+REOF
+        fi
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"mismatched result sender mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
     pushback)
         # Writes a result.json with status=blocked + pushback_reason=scope_insufficient.
         # Used by end_to_end.bats to test Decomposer re-invocation on worker pushback.
@@ -343,7 +391,7 @@ REOF
         exit 0
         ;;
     *)
-        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|no_claim|no_claim_with_result|claim_no_result|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|scope_violation|scope_clean|commit_to_scope|commit_to_add_dir|malformed_result_missing_fields|malformed_result_invalid_json|pushback)" >&2
+        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|no_claim|no_claim_with_result|claim_no_result|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|scope_violation|scope_clean|commit_to_scope|commit_to_add_dir|malformed_result_missing_fields|mismatched_result_id|mismatched_result_from|malformed_result_invalid_json|pushback)" >&2
         exit 2
         ;;
 esac

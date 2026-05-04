@@ -186,6 +186,54 @@ print('ok')
     [ "$status" -eq 0 ]
 }
 
+@test "#205 result.json: mismatched payload.id marks error and fires failed hook" {
+    export MOCK_CLAUDE_MODE=mismatched_result_id
+
+    cat > "$KIT_HOOKS/on-task-completed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/completed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-completed.sh"
+    cat > "$KIT_HOOKS/on-task-failed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/failed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-failed.sh"
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "mismatched result id" --category code --time-limit 60
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
+    [ "$status_field" = "error" ]
+    [ -f "$KIT_TMPDIR/failed-hook-fired" ]
+    [ ! -f "$KIT_TMPDIR/completed-hook-fired" ]
+}
+
+@test "#205 result.json: mismatched payload.from marks error and fires failed hook" {
+    export MOCK_CLAUDE_MODE=mismatched_result_from
+
+    cat > "$KIT_HOOKS/on-task-completed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/completed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-completed.sh"
+    cat > "$KIT_HOOKS/on-task-failed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/failed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-failed.sh"
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "mismatched result sender" --category code --time-limit 60
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
+    [ "$status_field" = "error" ]
+    [ -f "$KIT_TMPDIR/failed-hook-fired" ]
+    [ ! -f "$KIT_TMPDIR/completed-hook-fired" ]
+}
+
 @test "#90 result.json: worker-written result missing required fields surfaces error status" {
     export MOCK_CLAUDE_MODE=malformed_result_missing_fields
 
