@@ -73,12 +73,12 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# NPT budget flow — regression test for the pre-#18 bug where --budget was
-# silently ignored. The CSV's budget_npt column must equal what the operator
+# CGN budget flow — regression test for the pre-#18 bug where --budget was
+# silently ignored. The CSV's budget_cgn column must equal what the operator
 # passed.
 # ---------------------------------------------------------------------------
 
-@test "--budget N threads through to the CSV budget_npt column" {
+@test "--budget N threads through to the CSV budget_cgn column" {
     export MOCK_CLAUDE_MODE=happy
 
     run_spawner setup coder-01 coder
@@ -87,8 +87,8 @@ PYEOF
 
     [ "$status" -eq 0 ]
 
-    # CSV schema (post-#18): timestamp,task_id,agent_id,model,category,priority,budget_npt,cost_npt,turns,duration_s,denials,status
-    # budget_npt is column 7.
+    # CSV schema (post-#18): timestamp,task_id,agent_id,model,category,priority,budget_cgn,cost_cgn,turns,duration_s,denials,status
+    # budget_cgn is column 7.
     local row
     row=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv")
     local budget_field
@@ -98,11 +98,11 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# Cost CSV — NPT columns present, USD columns absent
+# Cost CSV — CGN columns present, USD columns absent
 # (regression test for #18: USD purged from kit)
 # ---------------------------------------------------------------------------
 
-@test "cost CSV header has NPT fields and no USD fields" {
+@test "cost CSV header has CGN fields and no USD fields" {
     export MOCK_CLAUDE_MODE=happy
 
     run_spawner setup coder-01 coder
@@ -111,9 +111,9 @@ PYEOF
     local header
     header=$(head -n1 "$KIT_LOGS/dispatch-costs.csv")
 
-    # NPT columns present
-    echo "$header" | grep -q "budget_npt"
-    echo "$header" | grep -q "cost_npt"
+    # CGN columns present
+    echo "$header" | grep -q "budget_cgn"
+    echo "$header" | grep -q "cost_cgn"
 
     # USD columns absent
     ! echo "$header" | grep -q -i "usd"
@@ -288,11 +288,11 @@ _init_scope_repo() {
 }
 
 # ---------------------------------------------------------------------------
-# Budget enforcement — dispatcher must terminate the worker when NPT exceeds
-# budget_npt and record is_error in the CSV status column.
+# Budget enforcement — dispatcher must terminate the worker when CGN exceeds
+# budget_cgn and record is_error in the CSV status column.
 # ---------------------------------------------------------------------------
 
-@test "--budget kills worker on NPT overrun and records error status" {
+@test "--budget kills worker on CGN overrun and records error status" {
     export MOCK_CLAUDE_MODE=budget_exceeded
 
     run_spawner setup coder-01 coder
@@ -387,61 +387,61 @@ _init_scope_repo() {
 }
 
 # ---------------------------------------------------------------------------
-# Issue #33 — NPT enforcement gaps (concerns #1–#5).
+# Issue #33 — CGN enforcement gaps (concerns #1–#5).
 #
 # Test labelling per plan:
 #   (a) bug-proving (RED)  — concern #1: cache_creation_input_tokens excluded
-#   (b) bug-proving (RED)  — concern #2: no 1.05× NPT exchange rate applied
+#   (b) bug-proving (RED)  — concern #2: no 1.05× CGN exchange rate applied
 #   (c) bug-proving (RED)  — concern #3: no soft cap; overshoot_ratio column absent
 #   (d) bug-proving (RED)  — concern #4: SIGTERM kills worker; SIGINT trap never fires
-#   (e) bug-proving (RED)  — concern #5: forced-result stuffs accum_npt into output_tokens
+#   (e) bug-proving (RED)  — concern #5: forced-result stuffs accum_cgn into output_tokens
 # ---------------------------------------------------------------------------
 
 # (a) bug-proving — RED until concern #1 fix lands
 # cache_creation mode: input=1000, output=500, cache_creation=200, cache_read=0
 # Today (3-channel, no rate): 1000+500+0 = 1500
 # After fix (4-channel + 1.05×): ceil((1000+500+200+0) * 1.05) = 1785
-@test "#33(a) cost_npt counts cache_creation_input_tokens" {
+@test "#33(a) cost_cgn counts cache_creation_input_tokens" {
     export MOCK_CLAUDE_MODE=cache_creation
 
     run_spawner setup coder-01 coder
-    run run_spawner dispatch coder-01 "cache_creation npt test" \
+    run run_spawner dispatch coder-01 "cache_creation cgn test" \
         --budget 50000 --category code --time-limit 30
 
     [ "$status" -eq 0 ]
 
-    local row cost_npt_field
+    local row cost_cgn_field
     row=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv")
-    cost_npt_field=$(echo "$row" | awk -F',' '{gsub(/"/, "", $8); print $8}')
+    cost_cgn_field=$(echo "$row" | awk -F',' '{gsub(/"/, "", $8); print $8}')
 
-    [ "$cost_npt_field" = "1785" ]
+    [ "$cost_cgn_field" = "1785" ]
 }
 
 # (b) bug-proving — RED until concern #2 fix lands
 # rate_check mode: input=1000, output=500, cache_creation=0, cache_read=0
 # Today (no rate): 1500
 # After fix (1.05× Claude rate): ceil(1500 * 1.05) = ceil(1575) = 1575
-@test "#33(b) cost_npt applies 1.05x NPT exchange rate for claude model family" {
+@test "#33(b) cost_cgn applies 1.05x CGN exchange rate for claude model family" {
     export MOCK_CLAUDE_MODE=rate_check
 
     run_spawner setup coder-01 coder
-    run run_spawner dispatch coder-01 "exchange rate npt test" \
+    run run_spawner dispatch coder-01 "exchange rate cgn test" \
         --budget 50000 --category code --time-limit 30
 
     [ "$status" -eq 0 ]
 
-    local row cost_npt_field
+    local row cost_cgn_field
     row=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv")
-    cost_npt_field=$(echo "$row" | awk -F',' '{gsub(/"/, "", $8); print $8}')
+    cost_cgn_field=$(echo "$row" | awk -F',' '{gsub(/"/, "", $8); print $8}')
 
-    [ "$cost_npt_field" = "1575" ]
+    [ "$cost_cgn_field" = "1575" ]
 }
 
 # (c) bug-proving — RED until concern #3 fix lands
-# Note: mock token count is native; soft cap compares post-rate NPT.
-# budget_exceeded emits 5M native tokens; with budget=1000, soft_cap=900 NPT.
+# Note: mock token count is native; soft cap compares post-rate CGN.
+# budget_exceeded emits 5M native tokens; with budget=1000, soft_cap=900 CGN.
 # Today: hard-cap check only, no soft_cap stop_reason, no overshoot_ratio column.
-# After fix: soft_cap fires at 900 NPT (well below 5M*1.05), overshoot_ratio logged.
+# After fix: soft_cap fires at 900 CGN (well below 5M*1.05), overshoot_ratio logged.
 @test "#33(c) CSV has overshoot_ratio column and stop_reason reflects soft cap" {
     export MOCK_CLAUDE_MODE=budget_exceeded
 
@@ -501,9 +501,9 @@ print('ok')
 # (e) bug-proving — RED until concern #5 fix lands
 # budget_exceeded: input=5M, output=0, cache_creation=0, cache_read=0
 # Today forced-result: usage={input:0, output:5000000, cache_read:0}
-#   (accum_npt stuffed into output_tokens; cache_creation absent)
+#   (accum_cgn stuffed into output_tokens; cache_creation absent)
 # After fix: usage={input:5000000, output:0, cache_read:0, cache_creation:0}
-#   + _terminated_npt field present
+#   + _terminated_cgn field present
 @test "#33(e) forced-result usage preserves per-channel native counts" {
     export MOCK_CLAUDE_MODE=budget_exceeded
 
@@ -523,12 +523,12 @@ d = json.load(open('$raw_file'))
 u = d.get('usage', {})
 assert 'cache_creation_input_tokens' in u, \
     f'usage missing cache_creation_input_tokens: {u}'
-assert '_terminated_npt' in d, \
-    f'missing _terminated_npt field: {list(d.keys())}'
+assert '_terminated_cgn' in d, \
+    f'missing _terminated_cgn field: {list(d.keys())}'
 assert u.get('input_tokens') == 5000000, \
     f'input_tokens should be 5000000, got {u.get(\"input_tokens\")}'
 assert u.get('output_tokens') == 0, \
-    f'output_tokens should be 0 (not accum_npt), got {u.get(\"output_tokens\")}'
+    f'output_tokens should be 0 (not accum_cgn), got {u.get(\"output_tokens\")}'
 print('ok')
 "
     [ "$status" -eq 0 ]

@@ -60,7 +60,7 @@
   "$defs": {
     "TaskNode": {
       "type": "object",
-      "required": ["id", "action", "agent", "input_from", "input_mapping", "scope", "budget_npt", "timeout_ms", "retry_policy", "condition", "success_criteria"],
+      "required": ["id", "action", "agent", "input_from", "input_mapping", "scope", "budget_cgn", "timeout_ms", "retry_policy", "condition", "success_criteria"],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -90,7 +90,7 @@
             "type": "string"
           }
         },
-        "budget_npt": {
+        "budget_cgn": {
           "type": "integer"
         },
         "timeout_ms": {

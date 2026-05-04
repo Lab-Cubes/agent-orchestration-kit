@@ -85,7 +85,7 @@ def validate(
     data: dict,
     input_plan_id: str,
     prior_version_id: int,
-    max_budget_npt_per_node: int | None = None,
+    max_budget_cgn_per_node: int | None = None,
     agents_home: str | None = None,
 ) -> list[tuple[str, str]]:
     errors: list[tuple[str, str]] = []
@@ -166,14 +166,14 @@ def validate(
                     f"node {node.get('id')!r} agent {agent_id!r} not set up under {agents_home}",
                 ))
 
-    if max_budget_npt_per_node is not None:
+    if max_budget_cgn_per_node is not None:
         for node in nodes:
-            budget_npt = node.get("budget_npt")
-            if isinstance(budget_npt, int) and budget_npt > max_budget_npt_per_node:
+            budget_cgn = node.get("budget_cgn")
+            if isinstance(budget_cgn, int) and budget_cgn > max_budget_cgn_per_node:
                 errors.append((
                     BUDGET_EXCESSIVE,
-                    f"node {node.get('id')!r} budget_npt {budget_npt} exceeds "
-                    f"max_budget_npt_per_node {max_budget_npt_per_node}",
+                    f"node {node.get('id')!r} budget_cgn {budget_cgn} exceeds "
+                    f"max_budget_cgn_per_node {max_budget_cgn_per_node}",
                 ))
 
     for node in nodes:
@@ -222,7 +222,7 @@ def _sample_node(
         "input_from": input_from or [],
         "input_mapping": {},
         "scope": scope or ["src"],
-        "budget_npt": 1000,
+        "budget_cgn": 1000,
         "timeout_ms": 60000,
         "retry_policy": {"max_retries": 0, "backoff_ms": 0},
         "condition": None,
@@ -238,7 +238,7 @@ def _self_test() -> None:
             _sample_tasklist(dag={"nodes": [_sample_node("node-1")], "edges": []}),
             "plan-test-20260425-120000",
             0,
-            max_budget_npt_per_node=200000,
+            max_budget_cgn_per_node=200000,
             agents_home=agents_home,
         ) == []
 
@@ -294,7 +294,7 @@ def _self_test() -> None:
         _sample_tasklist(dag={"nodes": [_sample_node("node-1")], "edges": []}),
         "plan-test-20260425-120000",
         0,
-        max_budget_npt_per_node=999,
+        max_budget_cgn_per_node=999,
     )
     assert budget_errors[0][0] == BUDGET_EXCESSIVE, budget_errors
 
@@ -334,12 +334,12 @@ def main() -> None:
 
     input_plan_id = _required_env("INPUT_PLAN_ID")
     prior_version_id = _prior_version_id()
-    max_budget_npt_per_node = _optional_positive_env("MAX_BUDGET_NPT_PER_NODE")
+    max_budget_cgn_per_node = _optional_positive_env("MAX_BUDGET_CGN_PER_NODE")
     agents_home = os.environ.get("NPS_AGENTS_HOME") or None
     if agents_home is None:
         print("warning: NPS_AGENTS_HOME unset; skipping agent existence check", file=sys.stderr)
     data = _load_json(sys.argv[1])
-    errors = validate(data, input_plan_id, prior_version_id, max_budget_npt_per_node, agents_home)
+    errors = validate(data, input_plan_id, prior_version_id, max_budget_cgn_per_node, agents_home)
     if errors:
         for code, message in errors:
             print(f"{code}:{message}", file=sys.stderr)

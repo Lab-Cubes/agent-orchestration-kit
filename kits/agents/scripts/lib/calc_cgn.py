@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# calc_npt — convert raw usage dict to NPT (NPS-0 §4.3).
-# Usage: from calc_npt import calc_npt, detect_family
+# calc_cgn — convert raw usage dict to CGN (NPS-0 §4.3).
+# Usage: from calc_cgn import calc_cgn, detect_family
 import math
 
 MODEL_FAMILY_ALIASES = {
@@ -24,7 +24,7 @@ def detect_family(model: str) -> str:
     return 'unknown'
 
 
-def calc_npt(usage: dict, model_family: str, rates: dict) -> int:
+def calc_cgn(usage: dict, model_family: str, rates: dict) -> int:
     total = (
         (usage.get('input_tokens') or 0)
         + (usage.get('output_tokens') or 0)

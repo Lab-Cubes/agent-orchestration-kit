@@ -29,7 +29,7 @@ from typing import Optional
 _ISSUER_DOMAIN = os.environ.get('ISSUER_DOMAIN', 'example.com')
 CREATED_BY = f"urn:nps:agent:{_ISSUER_DOMAIN}:decomposer-trivial"
 DEFAULT_AGENT = f"urn:nps:agent:{_ISSUER_DOMAIN}:coder-01"
-FALLBACK_BUDGET_NPT = 40000
+FALLBACK_BUDGET_CGN = 40000
 FALLBACK_TIMEOUT_MS = 900000
 
 
@@ -59,33 +59,33 @@ def _load_config_defaults(config_path: Optional[Path] = None) -> tuple[int, int]
             f"at {path}: {exc}; using fallback defaults",
             file=sys.stderr,
         )
-        return FALLBACK_BUDGET_NPT, FALLBACK_TIMEOUT_MS
+        return FALLBACK_BUDGET_CGN, FALLBACK_TIMEOUT_MS
 
-    budget_npt = config.get("default_budget_npt", FALLBACK_BUDGET_NPT)
+    budget_cgn = config.get("default_budget_cgn", FALLBACK_BUDGET_CGN)
     time_limit_s = config.get("default_time_limit_s", FALLBACK_TIMEOUT_MS // 1000)
     try:
-        budget_npt = int(budget_npt)
+        budget_cgn = int(budget_cgn)
         timeout_ms = int(time_limit_s) * 1000
     except (TypeError, ValueError):
         print(
-            "trivial-decomposer: warning: config.json has invalid default_budget_npt "
+            "trivial-decomposer: warning: config.json has invalid default_budget_cgn "
             "or default_time_limit_s; using fallback defaults",
             file=sys.stderr,
         )
-        return FALLBACK_BUDGET_NPT, FALLBACK_TIMEOUT_MS
+        return FALLBACK_BUDGET_CGN, FALLBACK_TIMEOUT_MS
 
-    if budget_npt <= 0 or timeout_ms <= 0:
+    if budget_cgn <= 0 or timeout_ms <= 0:
         print(
             "trivial-decomposer: warning: config.json defaults must be positive; "
             "using fallback defaults",
             file=sys.stderr,
         )
-        return FALLBACK_BUDGET_NPT, FALLBACK_TIMEOUT_MS
+        return FALLBACK_BUDGET_CGN, FALLBACK_TIMEOUT_MS
 
-    return budget_npt, timeout_ms
+    return budget_cgn, timeout_ms
 
 
-DEFAULT_BUDGET_NPT, DEFAULT_TIMEOUT_MS = _load_config_defaults()
+DEFAULT_BUDGET_CGN, DEFAULT_TIMEOUT_MS = _load_config_defaults()
 
 
 def _parse_frontmatter(plan_text: str) -> dict[str, str]:
@@ -181,7 +181,7 @@ def _emit(inp: dict) -> dict:
                     "input_from": [],
                     "input_mapping": {},
                     "scope": ["."],
-                    "budget_npt": DEFAULT_BUDGET_NPT,
+                    "budget_cgn": DEFAULT_BUDGET_CGN,
                     "timeout_ms": DEFAULT_TIMEOUT_MS,
                     "retry_policy": {"max_retries": 1, "backoff_ms": 5000},
                     "condition": None,
@@ -224,7 +224,7 @@ def _self_test() -> None:
     assert out["_ncp"] == 1
     assert out["type"] == "task_list"
     assert out["schema_version"] == 1
-    assert out["dag"]["nodes"][0]["budget_npt"] == 40000, "budget_npt should match config default"
+    assert out["dag"]["nodes"][0]["budget_cgn"] == 40000, "budget_cgn should match config default"
     assert out["dag"]["nodes"][0]["timeout_ms"] == 900000, "timeout_ms should match config default"
 
     # missing config path falls back to documented defaults with a clear warning

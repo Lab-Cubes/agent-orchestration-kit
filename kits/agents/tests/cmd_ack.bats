@@ -93,7 +93,7 @@ _write_pending() {
         "input_from": [],
         "input_mapping": {},
         "scope": ["src/"],
-        "budget_npt": 8000,
+        "budget_cgn": 8000,
         "timeout_ms": 600000,
         "retry_policy": {"max_retries": 1, "backoff_ms": 5000},
         "condition": null,

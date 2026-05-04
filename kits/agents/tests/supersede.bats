@@ -466,11 +466,11 @@ with open(path, 'w') as f:
                "prior_version":None,"pushback_reason":None,
                "dag":{"nodes":[
                    {"id":"node-a","action":"task-a","agent":"urn:nps:agent:example.com:coder-01",
-                    "input_from":[],"input_mapping":{},"scope":[],"budget_npt":1000,
+                    "input_from":[],"input_mapping":{},"scope":[],"budget_cgn":1000,
                     "timeout_ms":60000,"retry_policy":{"max_retries":0,"backoff_ms":0},
                     "condition":None,"success_criteria":{}},
                    {"id":"node-b","action":"task-b","agent":"urn:nps:agent:example.com:coder-01",
-                    "input_from":[],"input_mapping":{},"scope":[],"budget_npt":1000,
+                    "input_from":[],"input_mapping":{},"scope":[],"budget_cgn":1000,
                     "timeout_ms":60000,"retry_policy":{"max_retries":0,"backoff_ms":0},
                     "condition":None,"success_criteria":{}}
                ],"edges":[]}}, f, indent=2)

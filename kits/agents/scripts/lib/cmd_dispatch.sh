@@ -46,14 +46,14 @@ cmd_dispatch() {
 
     _disp_budget_for_category() {
         if [[ -f "$CONFIG_FILE" ]]; then
-            python3 - "$CONFIG_FILE" "$1" "$DEFAULT_BUDGET_NPT" <<'PYEOF'
+            python3 - "$CONFIG_FILE" "$1" "$DEFAULT_BUDGET_CGN" <<'PYEOF'
 import json, sys
 config_file, category, fallback = sys.argv[1], sys.argv[2], int(sys.argv[3])
 d = json.load(open(config_file))
-print(d.get('category_budget_npt', {}).get(category, fallback))
+print(d.get('category_budget_cgn', {}).get(category, fallback))
 PYEOF
         else
-            echo "$DEFAULT_BUDGET_NPT"
+            echo "$DEFAULT_BUDGET_CGN"
         fi
     }
 
@@ -201,7 +201,7 @@ intent = {
             'model': model,
             'time_limit': int(time_limit),
             'scope': scope_list,
-            'budget_npt': int(budget),
+            'budget_cgn': int(budget),
         },
     },
 }
@@ -233,7 +233,7 @@ PYEOF
     fi
     local prompt="You are $agent_id. Read your CLAUDE.md for identity and protocol. Then use Bash to run 'ls $agent_dir/inbox/' to find tasks. There IS a task waiting: ${task_id}.intent.json — read it, claim via mv to $agent_dir/active/, execute, archive intent to $agent_dir/done/, write result.json to $agent_dir/done/.${branch_instruction}"
 
-    log "Launching worker: $agent_id (model: $model, budget: $budget NPT, time-limit: ${time_limit}s, max-turns: $max_turns)"
+    log "Launching worker: $agent_id (model: $model, budget: $budget CGN, time-limit: ${time_limit}s, max-turns: $max_turns)"
     local start_time end_time duration
     start_time=$(date +%s)
 
@@ -245,10 +245,10 @@ PYEOF
         done
     fi
 
-    # Dispatch with wall-clock and NPT budget enforcement.
+    # Dispatch with wall-clock and CGN budget enforcement.
     # Runs claude with --output-format stream-json; accumulates per-turn token
     # counts from assistant events and terminates the worker via SIGTERM when
-    # budget_npt or time_limit is reached. A threading.Timer handles wall-clock
+    # budget_cgn or time_limit is reached. A threading.Timer handles wall-clock
     # so blocked readline() calls are interrupted when the process is killed.
     # Emits a single JSON line mirroring --output-format json so the parse
     # block below needs no changes.
@@ -264,7 +264,7 @@ PYEOF
     output=$(
         cd "$work_dir" && \
         NPS_DIR="$NPS_DIR" \
-        NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" \
+        CGN_EXCHANGE_RATES="$CGN_EXCHANGE_RATES_JSON" \
         NPS_SHUTDOWN_GRACE_S="$shutdown_grace_s" \
         NPS_SOFT_CAP_RATIO="$soft_cap_ratio" \
         NPS_PROMPT="$prompt" \
@@ -277,7 +277,7 @@ PYEOF
         python3 - <<'PYEOF' 2>&1
 import json, math, os, signal, subprocess, sys, threading
 sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
-from calc_npt import calc_npt, detect_family
+from calc_cgn import calc_cgn, detect_family
 
 prompt          = os.environ['NPS_PROMPT']
 model           = os.environ['NPS_MODEL']
@@ -288,7 +288,7 @@ grace_s         = int(os.environ.get('NPS_SHUTDOWN_GRACE_S', '15'))
 soft_cap_ratio  = float(os.environ.get('NPS_SOFT_CAP_RATIO', '0.9'))
 soft_cap        = math.ceil(budget * soft_cap_ratio)
 add_dirs        = os.environ.get('NPS_ADD_DIRS', '').split()
-rates           = json.loads(os.environ.get('NPS_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
+rates           = json.loads(os.environ.get('CGN_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
 runtime_name    = os.environ.get('NPS_RUNTIME', 'claude')
 
 # Load adapter by runtime name
@@ -307,7 +307,7 @@ proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
 
 state = {
     'stop_reason':        'end_turn',
-    'accum_npt':          0,
+    'accum_cgn':          0,
     'graceful_exit':      False,
     'result_event_seen':  False,
     'native': {'input_tokens': 0, 'output_tokens': 0,
@@ -338,8 +338,8 @@ try:
             for ch in ('input_tokens', 'output_tokens',
                        'cache_read_input_tokens', 'cache_creation_input_tokens'):
                 state['native'][ch] += u.get(ch) or 0
-            state['accum_npt'] += calc_npt(u, model_family, rates)
-            if state['accum_npt'] >= soft_cap and state['stop_reason'] == 'end_turn':
+            state['accum_cgn'] += calc_cgn(u, model_family, rates)
+            if state['accum_cgn'] >= soft_cap and state['stop_reason'] == 'end_turn':
                 state['stop_reason'] = 'soft_cap'
                 try:
                     proc.send_signal(adapter.shutdown_signal())
@@ -400,7 +400,7 @@ else:
         'stop_reason':        state['stop_reason'],
         'is_error':           True,
         'permission_denials': [],
-        '_terminated_npt':    state['accum_npt'],
+        '_terminated_cgn':    state['accum_cgn'],
     }
 print(json.dumps(out))
 PYEOF
@@ -415,7 +415,7 @@ PYEOF
     clean_json=$(echo "$output" | python3 "$NPS_DIR/scripts/lib/extract_result_json.py")
 
     local result="NO JSON OUTPUT"
-    local cost_npt="0"
+    local cost_cgn="0"
     local denials="0"
     local turns="0"
     local stop_reason="?"
@@ -427,24 +427,24 @@ PYEOF
         # shell code, and the `read` below is `IFS=$'\t'` so newlines/tabs
         # within fields can't corrupt the structure.
         local parse_out
-        parse_out=$(CLEAN_JSON="$clean_json" NPS_DIR="$NPS_DIR" NPS_EXCHANGE_RATES="$NPT_EXCHANGE_RATES_JSON" NPS_MODEL="$model" python3 - <<'PYEOF' 2>/dev/null
+        parse_out=$(CLEAN_JSON="$clean_json" NPS_DIR="$NPS_DIR" CGN_EXCHANGE_RATES="$CGN_EXCHANGE_RATES_JSON" NPS_MODEL="$model" python3 - <<'PYEOF' 2>/dev/null
 import json, os, sys
 sys.path.insert(0, os.path.join(os.environ['NPS_DIR'], 'scripts', 'lib'))
-from calc_npt import calc_npt, detect_family
+from calc_cgn import calc_cgn, detect_family
 try:
     d = json.loads(os.environ['CLEAN_JSON'])
 except json.JSONDecodeError:
     sys.exit(1)
 usage = d.get('usage') or {}
-if '_terminated_npt' in d:
-    cost_npt_val = d['_terminated_npt']
+if '_terminated_cgn' in d:
+    cost_cgn_val = d['_terminated_cgn']
 else:
-    rates = json.loads(os.environ.get('NPS_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
+    rates = json.loads(os.environ.get('CGN_EXCHANGE_RATES', '{}')) or {'unknown': 1.0}
     model_family = detect_family(os.environ.get('NPS_MODEL', ''))
-    cost_npt_val = calc_npt(usage, model_family, rates)
+    cost_cgn_val = calc_cgn(usage, model_family, rates)
 fields = [
     str(d.get('result', 'NO RESULT'))[:500].replace('\t', ' ').replace('\n', ' '),
-    str(cost_npt_val),
+    str(cost_cgn_val),
     str(len(d.get('permission_denials') or [])),
     str(d.get('num_turns', 0)),
     str(d.get('stop_reason', '?')),
@@ -454,7 +454,7 @@ print('\t'.join(fields))
 PYEOF
         ) || true
         if [[ -n "$parse_out" ]]; then
-            IFS=$'\t' read -r result cost_npt denials turns stop_reason status_val <<< "$parse_out"
+            IFS=$'\t' read -r result cost_cgn denials turns stop_reason status_val <<< "$parse_out"
         else
             result="PARSE ERROR"
             status_val="error"
@@ -464,11 +464,11 @@ PYEOF
     fi
 
     local overshoot_ratio="0.0"
-    if [[ "$budget" -gt 0 ]] && [[ "$cost_npt" =~ ^[0-9]+$ ]]; then
-        overshoot_ratio=$(python3 -c "print(round($cost_npt / $budget, 4))")
+    if [[ "$budget" -gt 0 ]] && [[ "$cost_cgn" =~ ^[0-9]+$ ]]; then
+        overshoot_ratio=$(python3 -c "print(round($cost_cgn / $budget, 4))")
     fi
 
-    log "Worker finished in ${duration}s (cost: ${cost_npt} NPT, turns: $turns, denials: $denials)"
+    log "Worker finished in ${duration}s (cost: ${cost_cgn} CGN, turns: $turns, denials: $denials)"
     log "Result: $result"
 
     # Fallback result.json if worker claimed the task but didn't write one.
@@ -487,9 +487,9 @@ PYEOF
         local completed_at
         completed_at=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
         python3 - "$task_id" "$status_val" "$agent_id" "$created_at" "$completed_at" \
-            "$duration" "$cost_npt" "$turns" "$stop_reason" "$ISSUER_DOMAIN" "$result" "$plan_id" << 'PYEOF' > "$agent_result" 2>/dev/null
+            "$duration" "$cost_cgn" "$turns" "$stop_reason" "$ISSUER_DOMAIN" "$result" "$plan_id" << 'PYEOF' > "$agent_result" 2>/dev/null
 import json, sys
-_, task_id, status_val, agent_id, picked_up, completed, duration, cost_npt, turns, stop, issuer_domain, worker_result, plan_id = sys.argv
+_, task_id, status_val, agent_id, picked_up, completed, duration, cost_cgn, turns, stop, issuer_domain, worker_result, plan_id = sys.argv
 fallback_value = worker_result if worker_result and worker_result not in ('NO JSON OUTPUT', 'NO RESULT', 'PARSE ERROR') else f"Fallback result (worker did not complete NOP lifecycle). Stop reason: {stop}. Check raw-output.json."
 result = {
     "_ncp": 1,
@@ -505,7 +505,7 @@ result = {
         "picked_up_at": picked_up,
         "completed_at": completed,
         "duration": int(duration) if duration.isdigit() else 0,
-        "cost_npt": int(cost_npt) if str(cost_npt).isdigit() else 0,
+        "cost_cgn": int(cost_cgn) if str(cost_cgn).isdigit() else 0,
         "files_changed": [],
         "commits": [],
         "follow_up": ["Review raw-output.json — worker may have hit limit before writing result"],
@@ -586,19 +586,19 @@ PYEOF
     # Append to cost log (CSV)
     mkdir -p "$(dirname "$COST_LOG")"
     if [[ ! -f "$COST_LOG" ]]; then
-        echo "timestamp,task_id,agent_id,model,category,priority,budget_npt,cost_npt,turns,duration_s,denials,status,overshoot_ratio" > "$COST_LOG"
+        echo "timestamp,task_id,agent_id,model,category,priority,budget_cgn,cost_cgn,turns,duration_s,denials,status,overshoot_ratio" > "$COST_LOG"
     fi
     printf '"%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s"\n' \
         "$created_at" "$task_id" "$agent_id" "$model" "$category" "$priority" \
-        "$budget" "$cost_npt" "$turns" "$duration" "$denials" "$status_val" "$overshoot_ratio" >> "$COST_LOG"
+        "$budget" "$cost_cgn" "$turns" "$duration" "$denials" "$status_val" "$overshoot_ratio" >> "$COST_LOG"
 
     # Hook: task completed, timed out, or failed
     if [[ "$status_val" == "success" ]]; then
-        run_hook "task-completed" "$task_id" "$agent_id" "completed" "$cost_npt"
+        run_hook "task-completed" "$task_id" "$agent_id" "completed" "$cost_cgn"
     elif [[ "$stop_reason" == "time_limit" ]]; then
-        run_hook "task-failed" "$task_id" "$agent_id" "timeout" "$cost_npt"
+        run_hook "task-failed" "$task_id" "$agent_id" "timeout" "$cost_cgn"
     else
-        run_hook "task-failed" "$task_id" "$agent_id" "failed" "$cost_npt"
+        run_hook "task-failed" "$task_id" "$agent_id" "failed" "$cost_cgn"
     fi
 
     # Worktree metadata for merge command

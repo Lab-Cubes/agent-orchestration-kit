@@ -246,7 +246,7 @@ print('ok')
     # Pre-place a minimal NOP intent directly in inbox/ — bypassing cmd_dispatch
     # so both claimants see the SAME pending file (not two unique dispatches).
     cat > "$intent" << INTENT
-{"_ncp":1,"type":"intent","intent":"race-test","confidence":1.0,"payload":{"_nop":1,"id":"${task_id}","from":"urn:nps:agent:test.localhost:overseer","to":"urn:nps:agent:test.localhost:coder-01","created_at":"2026-01-01T00:00:00Z","priority":"normal","category":"code","mailbox":{"base":"./"},"context":{},"constraints":{"model":"sonnet","time_limit":60,"scope":[],"budget_npt":1000}}}
+{"_ncp":1,"type":"intent","intent":"race-test","confidence":1.0,"payload":{"_nop":1,"id":"${task_id}","from":"urn:nps:agent:test.localhost:overseer","to":"urn:nps:agent:test.localhost:coder-01","created_at":"2026-01-01T00:00:00Z","priority":"normal","category":"code","mailbox":{"base":"./"},"context":{},"constraints":{"model":"sonnet","time_limit":60,"scope":[],"budget_cgn":1000}}}
 INTENT
 
     # Race: two subshells both attempt the claim rename concurrently.

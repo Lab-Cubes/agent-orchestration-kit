@@ -7,9 +7,9 @@
     "issuer_domain": {"type": "string", "minLength": 1},
     "issuer_agent_id": {"type": "string", "minLength": 1},
     "default_capabilities": {"type": "array", "items": {"type": "string"}},
-    "default_budget_npt": {"type": "integer", "minimum": 1},
-    "max_budget_npt_per_node": {"type": "integer", "minimum": 1},
-    "category_budget_npt": {
+    "default_budget_cgn": {"type": "integer", "minimum": 1},
+    "max_budget_cgn_per_node": {"type": "integer", "minimum": 1},
+    "category_budget_cgn": {
       "type": "object",
       "patternProperties": {
         "^\\$": {"type": "string"}
@@ -22,7 +22,7 @@
     "default_max_turns": {"type": "integer", "minimum": 1},
     "default_shutdown_grace_s": {"type": "integer", "minimum": 1},
     "default_soft_cap_ratio": {"type": "number", "exclusiveMinimum": 0, "maximum": 1.0},
-    "npt_exchange_rates": {
+    "cgn_exchange_rates": {
       "type": "object",
       "patternProperties": {
         "^\\$": {"type": "string"}

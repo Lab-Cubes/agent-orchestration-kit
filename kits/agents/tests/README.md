@@ -14,7 +14,7 @@ tests/
 ├── bin/
 │   └── claude                    # mock Claude CLI (switchable via MOCK_CLAUDE_MODE)
 ├── fixtures/
-│   └── config-minimal.json       # minimal NPT-only config for tests
+│   └── config-minimal.json       # minimal CGN-only config for tests
 ├── helpers/
 │   └── build-kit-tree.bash       # build_kit_tree() — isolated per-test kit tree
 └── test_dispatch_lifecycle.bats  # happy path, budget flow, failure, dry-run

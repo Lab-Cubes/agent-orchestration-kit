@@ -16,7 +16,7 @@
 #   spawn-agent.sh merge    <task-id> ["commit msg"] [--no-push]
 #
 # Dispatch options:
-#   --budget NPT        Max NPT to spend (default: category-based, from config.json)
+#   --budget CGN        Max CGN to spend (default: category-based, from config.json)
 #   --max-turns N       Safety net turn limit
 #   --time-limit N      Safety net wall-clock seconds
 #   --model MODEL       Model override (default: sonnet)
@@ -81,7 +81,7 @@ case "${1:-help}" in
         echo "  --reason <text>      Rejection reason (captured in escalation event)"
         echo ""
         echo "Dispatch options:"
-        echo "  --budget NPT       Max NPT (default: category-based from config.json)"
+        echo "  --budget CGN       Max CGN (default: category-based from config.json)"
         echo "  --max-turns N      Safety net (default: $DEFAULT_MAX_TURNS)"
         echo "  --time-limit N     Wall-clock seconds (default: $DEFAULT_TIME_LIMIT)"
         echo "  --model MODEL      Claude model (default: $DEFAULT_MODEL)"

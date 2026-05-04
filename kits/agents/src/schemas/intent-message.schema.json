@@ -144,7 +144,7 @@
             "type": "string"
           }
         },
-        "budget_npt": {
+        "budget_cgn": {
           "type": "integer"
         }
       }

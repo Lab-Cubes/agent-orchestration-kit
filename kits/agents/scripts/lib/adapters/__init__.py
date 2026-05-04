@@ -28,7 +28,7 @@ class AdapterBase(ABC):
 
     @abstractmethod
     def model_family(self, model):
-        """Return the model family string for NPT rate lookup."""
+        """Return the model family string for CGN rate lookup."""
 
     def shutdown_signal(self):
         """Signal to send for graceful shutdown. Override per runtime."""

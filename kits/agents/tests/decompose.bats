@@ -109,7 +109,7 @@ def node(i):
         "id": f"node-{i}", "action": "act",
         "agent": "urn:nps:agent:test.localhost:coder-01",
         "input_from": [], "input_mapping": {}, "scope": ["."],
-        "budget_npt": 1000, "timeout_ms": 60000,
+        "budget_cgn": 1000, "timeout_ms": 60000,
         "retry_policy": {"max_retries": 0, "backoff_ms": 0},
         "condition": None, "success_criteria": {},
     }
@@ -127,7 +127,7 @@ elif semantic_variant == "input_from_phantom" and nodes:
 elif semantic_variant == "agent_not_set_up" and nodes:
     nodes[0]["agent"] = "urn:nps:agent:test.localhost:missing-01"
 elif semantic_variant == "budget_excessive" and nodes:
-    nodes[0]["budget_npt"] = 200001
+    nodes[0]["budget_cgn"] = 200001
 elif semantic_variant == "scope_empty" and nodes:
     nodes[0]["scope"] = []
 elif semantic_variant == "scope_dot" and nodes:
@@ -635,7 +635,7 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 17 — Semantic validation: budget exceeds max_budget_npt_per_node
+# 17 — Semantic validation: budget exceeds max_budget_cgn_per_node
 # ---------------------------------------------------------------------------
 
 @test "semantic validation: budget excessive exits 1 with KIT-DECOMP-BUDGET-EXCESSIVE" {
