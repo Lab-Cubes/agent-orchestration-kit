@@ -59,6 +59,7 @@ _load_task_context() {
     else
         MAILBOX_BASE="."
     fi
+    AGENT_ID="$(basename "$MAILBOX_BASE")"
 }
 
 _claim_task() {
@@ -86,7 +87,7 @@ _write_result() {
   "probability": 1.0, "alternatives": [],
   "payload": {
     "_nop": 1, "schema_version": 1, "id": "$TASK_ID", "status": "$status",
-    "from": "urn:nps:agent:test.localhost:coder-01",
+    "from": "urn:nps:agent:test.localhost:${AGENT_ID:-coder-01}",
     "picked_up_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:01:00Z",
     "duration": 60, "cost_npt": 0,
     "files_changed": [], "commits": [], "follow_up": [], "error": $error_json
