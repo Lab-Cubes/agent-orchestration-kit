@@ -537,15 +537,34 @@ open(path, 'w').write(json.dumps(d, indent=2) + '\n')
 PYEOF
     fi
 
-    # --- result.json validation (#90): reject worker-written malformed files ---
-    RESULT_PATH="$agent_result" python3 -c "
+    # --- result.json validation (#90, #205): reject malformed or unbound files ---
+    RESULT_PATH="$agent_result" TASK_ID="$task_id" EXPECTED_FROM="urn:nps:agent:${ISSUER_DOMAIN}:${agent_id}" python3 - <<'PYEOF' 2>/dev/null || { warn "result.json invalid, missing required fields, or not bound to dispatched task/worker — marking error"; status_val="error"; }
 import json, os, sys
+
+path = os.environ['RESULT_PATH']
+task_id = os.environ['TASK_ID']
+expected_from = os.environ['EXPECTED_FROM']
+
 try:
-    d = json.load(open(os.environ['RESULT_PATH']))
-    assert '_ncp' in d and 'payload' in d and '_nop' in d.get('payload', {})
+    d = json.load(open(path))
+    p = d.get('payload', {})
+    assert '_ncp' in d and 'payload' in d and '_nop' in p
 except Exception:
     sys.exit(1)
-" 2>/dev/null || { warn "result.json invalid or missing required fields — marking error"; status_val="error"; }
+
+errors = []
+if p.get('id') != task_id:
+    errors.append(f"payload.id {p.get('id')!r} does not match dispatched task {task_id!r}")
+if p.get('from') != expected_from:
+    errors.append(f"payload.from {p.get('from')!r} does not match dispatched worker {expected_from!r}")
+
+if errors:
+    p['status'] = 'failed'
+    p['error'] = (p.get('error') or '') + ' RESULT IDENTITY VIOLATION: ' + '; '.join(errors)
+    p['_identity_violation'] = True
+    open(path, 'w').write(json.dumps(d, indent=2) + '\n')
+    sys.exit(1)
+PYEOF
 
     # --- Scope validation (#34): reject files_changed outside constraints.scope ---
     if [[ -n "$original_scope" && -f "$agent_result" ]]; then

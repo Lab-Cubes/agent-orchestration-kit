@@ -157,6 +157,25 @@ PYEOF
     [ "$status" -eq 0 ]
 }
 
+_assert_single_node_failed_identity_violation() {
+    local plan_id="$1"
+    run python3 - "$NPS_TASKLISTS_HOME/$plan_id/task-list-state.json" <<'PYEOF'
+import json, sys
+state = json.load(open(sys.argv[1]))
+node = state["node_states"]["node-a"]
+assert node["status"] == "failed", node
+assert node["task_id"], node
+assert node["result_path"], node
+result = json.load(open(node["result_path"]))
+payload = result["payload"]
+assert payload["status"] == "failed", payload
+assert payload.get("_identity_violation") is True, payload
+assert "RESULT IDENTITY VIOLATION" in (payload.get("error") or ""), payload
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # 1. Single-task happy path
 # ---------------------------------------------------------------------------
@@ -260,6 +279,28 @@ assert ns['node-c']['status'] == 'pending',  f"node-c: {ns['node-c']['status']}"
 print('ok')
 PYEOF
     [ "$status" -eq 0 ]
+}
+
+@test "#205 task-list: mismatched result id fails node instead of completing" {
+    _write_acked plan-mismatch-id 1 "$FIXTURES_DIR/single-task.json"
+
+    export MOCK_CLAUDE_MODE=mismatched_result_id
+    run run_dt plan-mismatch-id
+    unset MOCK_CLAUDE_MODE
+
+    [ "$status" -eq 1 ]
+    _assert_single_node_failed_identity_violation plan-mismatch-id
+}
+
+@test "#205 task-list: mismatched result sender fails node instead of completing" {
+    _write_acked plan-mismatch-from 1 "$FIXTURES_DIR/single-task.json"
+
+    export MOCK_CLAUDE_MODE=mismatched_result_from
+    run run_dt plan-mismatch-from
+    unset MOCK_CLAUDE_MODE
+
+    [ "$status" -eq 1 ]
+    _assert_single_node_failed_identity_violation plan-mismatch-from
 }
 
 # ---------------------------------------------------------------------------
