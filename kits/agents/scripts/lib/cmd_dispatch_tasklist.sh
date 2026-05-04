@@ -193,10 +193,10 @@ PYEOF
     done <<< "$parse_out"
 
     if [[ ${#node_ids[@]} -eq 0 ]]; then
-        log "cmd_dispatch_tasklist: task-list has no nodes — nothing to dispatch"
+        err "cmd_dispatch_tasklist: task-list DAG has no nodes"
         rm -f "$node_data_file"
         kill "$_lock_pid" 2>/dev/null || true
-        exit 0
+        exit 2
     fi
 
     log "cmd_dispatch_tasklist: ${#node_ids[@]} node(s), version=$version_id"

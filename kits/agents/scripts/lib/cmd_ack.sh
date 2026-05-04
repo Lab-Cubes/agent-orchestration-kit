@@ -192,6 +192,22 @@ PYEOF
         warn "cmd_ack: schema validator unavailable — skipping validation"
     fi
 
+    local node_count
+    node_count=$(python3 - "$pending_file" <<'PYEOF' 2>/dev/null
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print(len(d.get("dag", {}).get("nodes", [])))
+except Exception:
+    print(-1)
+PYEOF
+)
+    if [[ "$node_count" == "0" ]]; then
+        err "cmd_ack: task-list DAG has no nodes"
+        err "  Rename aborted. Fix the task-list or use --reject."
+        exit 1
+    fi
+
     # Resolve prior_version from the pending file
     local prior_version
     prior_version=$(python3 - "$pending_file" <<'PYEOF' 2>/dev/null
