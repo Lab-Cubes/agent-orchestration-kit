@@ -182,7 +182,7 @@ PYEOF
     # Optional schema validation against task-list.schema.json
     local schema_file="$NPS_DIR/src/schemas/task-list.schema.json"
     local validator_script="$NPS_DIR/scripts/lib/validate_schema.py"
-    if command -v python3 >/dev/null 2>&1 && [[ -f "$validator_script" ]] && [[ -f "$schema_file" ]]; then
+    if command -v python3 >/dev/null 2>&1 && [[ -f "$validator_script" ]] && [[ -f "$schema_file" ]] && python3 -c "import jsonschema" 2>/dev/null; then
         if ! python3 "$validator_script" "$schema_file" "$pending_file" 2>&1; then
             err "cmd_ack: schema validation failed for $pending_file"
             err "  Rename aborted. Fix the task-list or use --reject."

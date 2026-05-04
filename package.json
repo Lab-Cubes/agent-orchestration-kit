@@ -29,6 +29,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "check:changed": "pnpm --filter @nps-kit/agents test:changed",
     "typecheck": "pnpm -r typecheck",
     "clean": "pnpm -r clean"
   },
