@@ -128,8 +128,8 @@ export interface TaskConstraints {
   model?: string;
   time_limit?: number;
   scope?: string[];
-  /** Max NPT the worker may consume for this task (NPS-0 §4.3). */
-  budget_npt?: number;
+  /** Max CGN the worker may consume for this task (NPS-Release token-budget.md). */
+  budget_cgn?: number;
 }
 
 type NopVersion = 1;
@@ -190,8 +190,8 @@ export interface NopResultPayload {
   commits?: string[];
   follow_up?: string[];
   duration?: number;
-  /** NPT consumed executing this task. */
-  cost_npt?: number;
+  /** CGN consumed executing this task. */
+  cost_cgn?: number;
   /** Worker self-reported context capacity bucket. */
   context_capacity?: ContextCapacity;
   error?: string | null;
@@ -272,7 +272,7 @@ export interface TaskNode {
    */
   input_mapping: Record<string, string>;
   scope: string[];
-  budget_npt: number;
+  budget_cgn: number;
   timeout_ms: number;
   /** Retry behaviour; `backoff_ms` is a flat delay between attempts in v1. */
   retry_policy: { max_retries: number; backoff_ms: number };

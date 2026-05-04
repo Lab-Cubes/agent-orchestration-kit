@@ -38,7 +38,7 @@ out = {
                 "input_from": [],
                 "input_mapping": {},
                 "scope": ["."],
-                "budget_npt": 20000,
+                "budget_cgn": 20000,
                 "timeout_ms": 3600000,
                 "retry_policy": {"max_retries": 0, "backoff_ms": 0},
                 "condition": None,

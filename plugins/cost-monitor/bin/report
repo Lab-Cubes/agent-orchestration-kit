@@ -7,7 +7,7 @@ Usage:
 
 Options:
     --log PATH    Path to dispatch-costs.csv (overrides config.json log_path)
-    --rate RATE   NPT→USD conversion rate (overrides config.json npt_usd_rate)
+    --rate RATE   CGN→USD conversion rate (overrides config.json cgn_usd_rate)
 """
 
 import csv
@@ -64,7 +64,7 @@ def parse_row(row):
     """
     n = len(row)
     if n >= 13:
-        # 13-col: [ts, task, agent, model, cat, pri, budget_npt, cost_npt, cost_usd_derived, turns, dur, denials, status]
+        # 13-col: [ts, task, agent, model, cat, pri, budget_cgn, cost_cgn, cost_usd_derived, turns, dur, denials, status]
         return {
             "timestamp": row[0],
             "task_id": row[1],
@@ -78,7 +78,7 @@ def parse_row(row):
             "status": row[12],
         }
     elif n >= 12:
-        # 12-col: [ts, task, worker, model, cat, pri, budget_npt, cost_usd, turns, dur, denials, status]
+        # 12-col: [ts, task, worker, model, cat, pri, budget_cgn, cost_usd, turns, dur, denials, status]
         return {
             "timestamp": row[0],
             "task_id": row[1],
@@ -146,7 +146,7 @@ def main():
     config = find_config()
 
     log_path = None
-    npt_usd_rate = None
+    cgn_usd_rate = None
 
     i = 0
     while i < len(args):
@@ -154,15 +154,15 @@ def main():
             log_path = args[i + 1]
             i += 2
         elif args[i] == "--rate" and i + 1 < len(args):
-            npt_usd_rate = float(args[i + 1])
+            cgn_usd_rate = float(args[i + 1])
             i += 2
         else:
             i += 1
 
     if log_path is None:
         log_path = config.get("log_path") or default_log_path()
-    if npt_usd_rate is None:
-        npt_usd_rate = float(config.get("npt_usd_rate", 0.001))
+    if cgn_usd_rate is None:
+        cgn_usd_rate = float(config.get("cgn_usd_rate", 0.001))
 
     log_path = Path(log_path).resolve()
     rows = load_csv(log_path)
@@ -179,11 +179,11 @@ def main():
     print(f"{'─'*60}")
     print(f"  All-time  {len(rows):>4} tasks   {fmt_usd(total_cost)}")
     print(f"  Today     {len(today_rows):>4} tasks   {fmt_usd(today_cost)}")
-    if npt_usd_rate:
-        total_npt = total_cost / npt_usd_rate
-        today_npt = today_cost / npt_usd_rate
-        print(f"  All-time  {total_npt:>9.1f} NPT  (at ${npt_usd_rate}/NPT)")
-        print(f"  Today     {today_npt:>9.1f} NPT")
+    if cgn_usd_rate:
+        total_cgn = total_cost / cgn_usd_rate
+        today_cgn = today_cost / cgn_usd_rate
+        print(f"  All-time  {total_cgn:>9.1f} CGN  (at ${cgn_usd_rate}/CGN)")
+        print(f"  Today     {today_cgn:>9.1f} CGN")
 
     # ── By agent ─────────────────────────────────────────────────────────────
     by_agent = defaultdict(lambda: {"tasks": 0, "cost": 0.0})

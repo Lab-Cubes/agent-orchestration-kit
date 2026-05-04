@@ -63,7 +63,7 @@ Expected Discord channel output (two messages within ~90s):
 
 ```
 🔨 coder1 claimed task-operator-{timestamp}
-✅ coder1 completed task-operator-{timestamp} (NNNN NPT)
+✅ coder1 completed task-operator-{timestamp} (NNNN CGN)
 ```
 
 If no messages appear:

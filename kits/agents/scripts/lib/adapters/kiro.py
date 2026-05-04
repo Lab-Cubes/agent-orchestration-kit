@@ -41,7 +41,7 @@ class KiroAdapter(AdapterBase):
         return None
 
     def model_family(self, model):
-        from calc_npt import detect_family
+        from calc_cgn import detect_family
         return detect_family(model)
 
     def shutdown_signal(self):

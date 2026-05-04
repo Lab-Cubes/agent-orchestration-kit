@@ -17,7 +17,7 @@
         "input_from": [],
         "input_mapping": {},
         "scope": [],
-        "budget_npt": 1000,
+        "budget_cgn": 1000,
         "timeout_ms": 60000,
         "retry_policy": {
           "max_retries": 0,

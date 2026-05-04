@@ -34,7 +34,7 @@
       "model": "sonnet",
       "time_limit": 900,
       "scope": ["kits/agents/src/nop-types.ts"],
-      "budget_npt": 40000
+      "budget_cgn": 40000
     },
     "success_criteria": {
       "tests": ["npm run typecheck"]

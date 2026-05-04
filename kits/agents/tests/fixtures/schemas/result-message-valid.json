@@ -17,7 +17,7 @@
     "commits": ["abc1234 - worker(coder): update schema fields"],
     "follow_up": [],
     "duration": 120,
-    "cost_npt": 1234,
+    "cost_cgn": 1234,
     "context_capacity": "fresh",
     "error": null
   }

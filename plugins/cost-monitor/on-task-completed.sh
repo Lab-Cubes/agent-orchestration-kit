@@ -2,9 +2,9 @@
 # cost-monitor plugin — on-task-completed hook.
 #
 # Emits to stderr:
-#   [cost] {agent} {task_id}: {NPT} NPT (~${USD}) · {duration}s · {category}
+#   [cost] {agent} {task_id}: {CGN} CGN (~${USD}) · {duration}s · {category}
 #
-# Env vars (from NPS invoker): NPS_TASK_ID, NPS_AGENT_ID, NPS_COST_NPT, NPS_EVENT
+# Env vars (from NPS invoker): NPS_TASK_ID, NPS_AGENT_ID, NPS_COST_CGN, NPS_EVENT
 
 set -euo pipefail
 
@@ -13,17 +13,17 @@ CONFIG="$PLUGIN_DIR/config.json"
 
 AGENT="${NPS_AGENT_ID:-unknown}"
 TASK_ID="${NPS_TASK_ID:-unknown}"
-NPT="${NPS_COST_NPT:-0}"
+CGN="${NPS_COST_CGN:-0}"
 
-# Load NPT→USD rate from config (default: 0.001).
+# Load CGN→USD rate from config (default: 0.001).
 # Config path passed as argv to avoid shell interpolation into Python source.
-read -r NPT_USD_RATE < <(python3 - "$CONFIG" <<'PYEOF'
+read -r CGN_USD_RATE < <(python3 - "$CONFIG" <<'PYEOF'
 import json, sys
 config_path = sys.argv[1]
 rate = 0.001
 try:
     d = json.load(open(config_path))
-    rate = float(d.get('npt_usd_rate', 0.001))
+    rate = float(d.get('cgn_usd_rate', 0.001))
 except Exception:
     pass
 print(rate)
@@ -49,16 +49,16 @@ PYEOF
     )
 fi
 
-# Calculate USD from NPT, pass values as argv for safety.
-USD=$(python3 - "$NPT" "$NPT_USD_RATE" <<'PYEOF'
+# Calculate USD from CGN, pass values as argv for safety.
+USD=$(python3 - "$CGN" "$CGN_USD_RATE" <<'PYEOF'
 import sys
 try:
-    npt = float(sys.argv[1])
+    cgn = float(sys.argv[1])
     rate = float(sys.argv[2])
-    print(f'{npt * rate:.4f}')
+    print(f'{cgn * rate:.4f}')
 except Exception:
     print('?')
 PYEOF
 )
 
-echo "[cost] $AGENT $TASK_ID: $NPT NPT (~\$$USD) · ${DURATION}s · $CATEGORY" >&2
+echo "[cost] $AGENT $TASK_ID: $CGN CGN (~\$$USD) · ${DURATION}s · $CATEGORY" >&2

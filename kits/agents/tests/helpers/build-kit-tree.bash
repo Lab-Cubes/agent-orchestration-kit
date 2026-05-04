@@ -5,7 +5,7 @@
 # then call `build_kit_tree "$BATS_TMPDIR_UNIQUE"` inside setup().
 #
 # Creates an isolated kit tree under the given directory, copies the real
-# scripts/ and templates/ in, drops a minimal NPT-only config fixture, and
+# scripts/ and templates/ in, drops a minimal CGN-only config fixture, and
 # prepends the mock Claude CLI (kits/agents/tests/bin/) to PATH.
 #
 # Exports:
@@ -43,7 +43,7 @@ build_kit_tree() {
     # Copy templates (AGENT-CLAUDE.md + personas/) from the real kit
     cp -r "$source_kit/templates" "$KIT_TEMPLATES"
 
-    # Drop minimal NPT-only config
+    # Drop minimal CGN-only config
     cp "$tests_dir/fixtures/config-minimal.json" "$KIT_TREE/config.json"
 
     # Mock Claude CLI — prepend its dir to PATH

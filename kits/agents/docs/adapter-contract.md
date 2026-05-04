@@ -11,7 +11,7 @@ Each adapter lives in `scripts/lib/adapters/<name>.py` and extends `AdapterBase`
 | `parse_event` | `(line: str) → dict \| None` | Parse one stdout line into an event dict, or None to skip |
 | `extract_usage` | `(event: dict) → dict` | Extract native token usage from an event (empty dict if none) |
 | `extract_result` | `(event: dict) → dict \| None` | Extract final result dict, or None if not a result event |
-| `model_family` | `(model: str) → str` | Resolve model string to family for NPT rate lookup |
+| `model_family` | `(model: str) → str` | Resolve model string to family for Cognon (CGN) rate lookup |
 | `shutdown_signal` | `() → signal` | Signal for graceful shutdown (e.g. SIGINT, SIGTERM) |
 
 ## Shipped adapters
@@ -32,7 +32,7 @@ Each adapter lives in `scripts/lib/adapters/<name>.py` and extends `AdapterBase`
 ## Limitations
 
 - Runtimes without stream-json output (e.g. Kiro) get synthetic results from collected text
-- Runtimes without per-event token reporting have no NPT budget enforcement; `--time-limit` is the safety net
+- Runtimes without per-event token reporting have no Cognon (CGN) budget enforcement; `--time-limit` is the safety net
 - `add_dirs` scope enforcement is runtime-specific: Claude uses `--add-dir`, Kiro has no equivalent — `constraints.scope` is advisory-only under Kiro until upstream adds a filesystem-scope flag
 
 ## Security surface differences

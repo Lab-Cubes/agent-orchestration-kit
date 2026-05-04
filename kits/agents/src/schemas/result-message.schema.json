@@ -114,7 +114,7 @@
         "duration": {
           "type": "integer"
         },
-        "cost_npt": {
+        "cost_cgn": {
           "type": "integer"
         },
         "context_capacity": {

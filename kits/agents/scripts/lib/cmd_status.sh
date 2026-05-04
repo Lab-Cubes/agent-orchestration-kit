@@ -22,7 +22,7 @@ p = d.get('payload', {})
 print(f"  Task:      {p.get('id', '?')}")
 print(f"  Status:    {p.get('status', '?')}")
 print(f"  Duration:  {p.get('duration', '?')}s")
-print(f"  Cost NPT:  {p.get('cost_npt', '?')}")
+print(f"  Cost CGN:  {p.get('cost_cgn', '?')}")
 print(f"  Files:     {p.get('files_changed', [])}")
 print(f"  Summary:   {str(d.get('value', '?'))[:200]}")
 PYEOF

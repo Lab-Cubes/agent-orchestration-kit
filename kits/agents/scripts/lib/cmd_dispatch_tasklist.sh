@@ -144,7 +144,7 @@ PYEOF
     # ---- Parse task-list: emit unit-separator-delimited node rows ----
     # Separator: \x1f (ASCII 31, unit separator) — non-whitespace so empty
     # scope_csv fields don't collapse when read by IFS=$'\037' read.
-    # Format: node_id \x1f agent_id \x1f action \x1f scope_csv \x1f budget_npt \x1f timeout_s
+    # Format: node_id \x1f agent_id \x1f action \x1f scope_csv \x1f budget_cgn \x1f timeout_s
     local node_data_file
     node_data_file=$(mktemp)
 
@@ -160,7 +160,7 @@ for n in d['dag']['nodes']:
     scope_csv = ','.join(n.get('scope') or [])
     timeout_s = str(int(n.get('timeout_ms', 600000) // 1000))
     max_retries = str(n.get('retry_policy', {}).get('max_retries', 0))
-    print(f"NODE={n['id']}{SEP}{agent_id}{SEP}{n['action']}{SEP}{scope_csv}{SEP}{n['budget_npt']}{SEP}{timeout_s}{SEP}{max_retries}")
+    print(f"NODE={n['id']}{SEP}{agent_id}{SEP}{n['action']}{SEP}{scope_csv}{SEP}{n['budget_cgn']}{SEP}{timeout_s}{SEP}{max_retries}")
 PYEOF
     ) || { err "cmd_dispatch_tasklist: failed to parse task-list JSON"; rm -f "$node_data_file"; kill "$_lock_pid" 2>/dev/null || true; exit 2; }
 

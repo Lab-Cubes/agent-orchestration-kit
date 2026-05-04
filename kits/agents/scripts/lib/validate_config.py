@@ -21,38 +21,38 @@ def validate(config):
         if not isinstance(val, str) or not val:
             errors.append(f"'{key}' must be a non-empty string")
 
-    _check_positive_int(config, 'default_budget_npt', errors)
-    _check_positive_int(config, 'max_budget_npt_per_node', errors)
+    _check_positive_int(config, 'default_budget_cgn', errors)
+    _check_positive_int(config, 'max_budget_cgn_per_node', errors)
     _check_positive_int(config, 'default_time_limit_s', errors)
     _check_positive_int(config, 'default_max_turns', errors)
     _check_positive_int(config, 'default_shutdown_grace_s', errors)
 
-    cbn = config.get('category_budget_npt')
+    cbn = config.get('category_budget_cgn')
     if cbn is not None:
         if not isinstance(cbn, dict):
-            errors.append("'category_budget_npt' must be a dict")
+            errors.append("'category_budget_cgn' must be a dict")
         else:
             for cat, val in cbn.items():
                 if cat.startswith('$'):
                     continue
                 if not isinstance(val, int) or isinstance(val, bool) or val < 1:
-                    errors.append(f"'category_budget_npt.{cat}' must be a positive integer")
+                    errors.append(f"'category_budget_cgn.{cat}' must be a positive integer")
 
     scr = config.get('default_soft_cap_ratio')
     if scr is not None:
         if not isinstance(scr, (int, float)) or isinstance(scr, bool) or scr <= 0 or scr > 1.0:
             errors.append("'default_soft_cap_ratio' must be a number in (0, 1.0]")
 
-    rates = config.get('npt_exchange_rates')
+    rates = config.get('cgn_exchange_rates')
     if rates is not None:
         if not isinstance(rates, dict):
-            errors.append("'npt_exchange_rates' must be a dict")
+            errors.append("'cgn_exchange_rates' must be a dict")
         else:
             for family, val in rates.items():
                 if family.startswith('$'):
                     continue
                 if not isinstance(val, (int, float)) or isinstance(val, bool) or val < 0:
-                    errors.append(f"'npt_exchange_rates.{family}' must be a non-negative number")
+                    errors.append(f"'cgn_exchange_rates.{family}' must be a non-negative number")
 
     return errors
 

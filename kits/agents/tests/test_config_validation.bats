@@ -42,10 +42,10 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# 4. [BUG-PROVING] Negative default_budget_npt — FAILS at RED, PASSES at GREEN
+# 4. [BUG-PROVING] Negative default_budget_cgn — FAILS at RED, PASSES at GREEN
 # ---------------------------------------------------------------------------
-@test "validator rejects a negative default_budget_npt" {
-    echo '{"issuer_domain":"x","issuer_agent_id":"y","default_budget_npt":-1}' > "$KIT_TMPDIR/cfg.json"
+@test "validator rejects a negative default_budget_cgn" {
+    echo '{"issuer_domain":"x","issuer_agent_id":"y","default_budget_cgn":-1}' > "$KIT_TMPDIR/cfg.json"
     run python3 "$VALIDATOR" "$KIT_TMPDIR/cfg.json"
     [ "$status" -eq 1 ]
 }
@@ -60,19 +60,19 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# 6. max_budget_npt_per_node positive integer — passes
+# 6. max_budget_cgn_per_node positive integer — passes
 # ---------------------------------------------------------------------------
-@test "max_budget_npt_per_node positive integer is accepted" {
-    echo '{"issuer_domain":"x","issuer_agent_id":"y","max_budget_npt_per_node":200000}' > "$KIT_TMPDIR/cfg.json"
+@test "max_budget_cgn_per_node positive integer is accepted" {
+    echo '{"issuer_domain":"x","issuer_agent_id":"y","max_budget_cgn_per_node":200000}' > "$KIT_TMPDIR/cfg.json"
     run python3 "$VALIDATOR" "$KIT_TMPDIR/cfg.json"
     [ "$status" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
-# 7. max_budget_npt_per_node zero — fails
+# 7. max_budget_cgn_per_node zero — fails
 # ---------------------------------------------------------------------------
-@test "max_budget_npt_per_node = 0 fails validation" {
-    echo '{"issuer_domain":"x","issuer_agent_id":"y","max_budget_npt_per_node":0}' > "$KIT_TMPDIR/cfg.json"
+@test "max_budget_cgn_per_node = 0 fails validation" {
+    echo '{"issuer_domain":"x","issuer_agent_id":"y","max_budget_cgn_per_node":0}' > "$KIT_TMPDIR/cfg.json"
     run python3 "$VALIDATOR" "$KIT_TMPDIR/cfg.json"
     [ "$status" -eq 1 ]
 }

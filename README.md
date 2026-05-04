@@ -14,7 +14,7 @@ agent-orchestration-kit/
 ├── kits/              # Adopter kits (clone, set up, run)
 │   └── agents/        # NOP multi-agent orchestration — mailbox + spawn + workers
 └── plugins/           # Optional hook plugins for the kits
-    ├── cost-monitor/  # Per-task NPT cost logging and reporting
+    ├── cost-monitor/  # Per-task Cognon (CGN) cost logging and reporting
     └── discord/       # Discord notifications for kits/agents
 ```
 
@@ -26,7 +26,7 @@ cd agent-orchestration-kit/kits/agents && ./bin/setup && ./bin/benchmark
 ```
 
 The benchmark runs the same task two ways — naive prompt-embedded context vs
-NOP mailbox dispatch — and shows real NPT saved on your machine.
+NOP mailbox dispatch — and shows real Cognon (CGN) saved on your machine.
 
 ## Audiences
 

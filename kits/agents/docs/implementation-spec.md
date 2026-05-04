@@ -216,7 +216,7 @@ runs them at lifecycle events. A broken or missing hook never blocks the worker.
 | `NPS_TASK_ID`  | Full task ID (`task-{issuer}-{timestamp}`)   |
 | `NPS_AGENT_ID` | Worker ID that handled the task              |
 | `NPS_STATUS`   | Lifecycle status string (`pending`, `completed`, `failed`) |
-| `NPS_COST_NPT` | NPT consumed (integer; 0 for pre-completion events) |
+| `NPS_COST_CGN` | Cognon (CGN) consumed (integer; 0 for pre-completion events) |
 | `NPS_EVENT`    | Event name (`task-claimed`, `task-completed`, `task-failed`) |
 
 ### Exit codes
@@ -281,37 +281,38 @@ Dev mode uses domain `dev.localhost`. Production uses your org's registered doma
 
 ---
 
-## 8. NPT Formula and Budget Enforcement
+## 8. Cognon (CGN) Formula and Budget Enforcement
 
-NPT (NPS Token) is the cross-model standardized unit from NPS-0 §4.3.
+Cognon (CGN) is the cross-model standardized unit defined by the NPS-Release
+`spec/token-budget.md` v0.3 Cognon Budget Specification.
 
 ### 8.1 Four-channel formula (v0.2.0)
 
 All four token channels reported by the runtime are counted, multiplied by the model-family exchange rate, and rounded up:
 
 ```
-NPT = ceil((input_tokens + output_tokens + cache_read_input_tokens + cache_creation_input_tokens) × rate)
+CGN = ceil((input_tokens + output_tokens + cache_read_input_tokens + cache_creation_input_tokens) × rate)
 ```
 
-Exchange rates by model family (`config.json::npt_exchange_rates`; values below are the shipped defaults):
+Exchange rates by model family (`config.json::cgn_exchange_rates`; values below are the shipped defaults):
 
 | Family    | Rate | Notes |
 |-----------|------|-------|
-| `claude`  | 1.05 | Context overhead per NPS-0 §4.3 |
+| `claude`  | 1.05 | Context overhead per Cognon Budget Specification v0.3 |
 | `gpt`     | 1.0  | |
 | `gemini`  | 0.95 | |
 | `llama`   | 1.02 | |
 | `mistral` | 0.98 | |
 | `unknown` | 1.0  | Fallback for unrecognised families |
 
-Model strings (`sonnet`, `haiku`, `opus`, full IDs such as `claude-sonnet-4-6`) are resolved to their family via `scripts/lib/calc_npt.py::detect_family`. Override the table via `config.json::npt_exchange_rates`.
+Model strings (`sonnet`, `haiku`, `opus`, full IDs such as `claude-sonnet-4-6`) are resolved to their family via `scripts/lib/calc_cgn.py::detect_family`. Override the table via `config.json::cgn_exchange_rates`.
 
 ### 8.2 Soft cap and overshoot reporting
 
 Enforcement fires at the **soft cap**, not the hard budget, giving the worker a margin to emit a final result:
 
 ```
-soft_cap = ceil(budget_npt × soft_cap_ratio)   # default ratio: 0.90
+soft_cap = ceil(budget_cgn × soft_cap_ratio)   # default ratio: 0.90
 ```
 
 `soft_cap_ratio` is sourced from `config.json::default_soft_cap_ratio` (default `0.90`); override per-dispatch with `--soft-cap-ratio`. When the soft cap fires, `stop_reason` in the raw-output JSON is `soft_cap`.
@@ -319,7 +320,7 @@ soft_cap = ceil(budget_npt × soft_cap_ratio)   # default ratio: 0.90
 `dispatch-costs.csv` includes an `overshoot_ratio` column:
 
 ```
-overshoot_ratio = round(cost_npt / budget_npt, 4)
+overshoot_ratio = round(cost_cgn / budget_cgn, 4)
 ```
 
 ### 8.3 Graceful shutdown ladder
@@ -345,13 +346,13 @@ When the forced path applies (worker terminated before completing, or grace wind
     "cache_read_input_tokens":     <per-channel count>,
     "cache_creation_input_tokens": <per-channel count>
   },
-  "_terminated_npt": <dispatcher-computed NPT total>,
+  "_terminated_cgn": <dispatcher-computed Cognon (CGN) total>,
   "stop_reason":     "soft_cap" | "time_limit",
   "is_error":        true
 }
 ```
 
-`usage` holds real per-channel native counts — not a derived NPT total. The parse block uses `_terminated_npt` directly when present, skipping `calc_npt` to avoid double-counting.
+`usage` holds real per-channel native counts — not a derived Cognon (CGN) total. The parse block uses `_terminated_cgn` directly when present, skipping `calc_cgn` to avoid double-counting.
 
 ---
 
@@ -364,13 +365,13 @@ Copy `config.example.json` to `config.json`. Edit before first use.
 | `issuer_domain`               | string   | `dev.localhost` | Domain fragment in NIDs. Use org domain for production.        |
 | `issuer_agent_id`             | string   | `operator`      | Agent ID of the orchestrator/dispatcher.                       |
 | `default_capabilities`        | string[] | `["nop:execute"]` | Capabilities granted to all workers by default.              |
-| `default_budget_npt`          | integer  | `40000`         | Per-task NPT cap when no category budget applies.              |
-| `category_budget_npt.code`    | integer  | `40000`         | NPT cap for `code` category tasks.                             |
-| `category_budget_npt.docs`    | integer  | `60000`         | NPT cap for `docs` category tasks.                             |
-| `category_budget_npt.test`    | integer  | `30000`         | NPT cap for `test` category tasks.                             |
-| `category_budget_npt.research`| integer  | `60000`         | NPT cap for `research` category tasks.                         |
-| `category_budget_npt.refactor`| integer  | `60000`         | NPT cap for `refactor` category tasks.                         |
-| `category_budget_npt.ops`     | integer  | `40000`         | NPT cap for `ops` category tasks.                              |
+| `default_budget_cgn`          | integer  | `40000`         | Per-task Cognon (CGN) cap when no category budget applies.              |
+| `category_budget_cgn.code`    | integer  | `40000`         | Cognon (CGN) cap for `code` category tasks.                             |
+| `category_budget_cgn.docs`    | integer  | `60000`         | Cognon (CGN) cap for `docs` category tasks.                             |
+| `category_budget_cgn.test`    | integer  | `30000`         | Cognon (CGN) cap for `test` category tasks.                             |
+| `category_budget_cgn.research`| integer  | `60000`         | Cognon (CGN) cap for `research` category tasks.                         |
+| `category_budget_cgn.refactor`| integer  | `60000`         | Cognon (CGN) cap for `refactor` category tasks.                         |
+| `category_budget_cgn.ops`     | integer  | `40000`         | Cognon (CGN) cap for `ops` category tasks.                              |
 | `default_model`               | string   | `sonnet`        | Model used when `constraints.model` is not set in intent.      |
 | `runtime`                     | string   | `claude`        | Agent runtime adapter (`claude` or `kiro`); override per-dispatch with `--runtime`. |
 | `default_time_limit_s`        | integer  | `900`           | Wall-clock seconds before timeout. Hard stop.                  |
@@ -381,16 +382,16 @@ Copy `config.example.json` to `config.json`. Edit before first use.
 | `persona_set`                 | string   | `personas`      | Template subdirectory under `kits/agents/templates/` used when bootstrapping worker personas. |
 | `default_shutdown_grace_s`    | integer  | `15`            | Seconds to wait for graceful exit after SIGINT (soft cap path). |
 | `default_soft_cap_ratio`      | number   | `0.90`          | Fraction of budget at which soft cap fires (0 < ratio ≤ 1).   |
-| `npt_exchange_rates`          | object   | see §8.1        | Per-family NPT multipliers. Keys are family names; `$`-prefixed keys are comments. |
+| `cgn_exchange_rates`          | object   | see §8.1        | Per-family Cognon (CGN) multipliers. Keys are family names; `$`-prefixed keys are comments. |
 
-Category-specific budgets override `default_budget_npt` when the dispatcher has
-a matching `category_budget_npt.<category>` entry. Explicit `--budget` on the
+Category-specific budgets override `default_budget_cgn` when the dispatcher has
+a matching `category_budget_cgn.<category>` entry. Explicit `--budget` on the
 dispatch command overrides both config defaults.
 
-The bundled trivial decomposer reads `default_budget_npt` and
+The bundled trivial decomposer reads `default_budget_cgn` and
 `default_time_limit_s` from `config.json` for its single emitted node. If
 `config.json` cannot be read, it warns on stderr and falls back to the documented
-defaults: `40000` NPT and `900000` ms.
+defaults: `40000` Cognon (CGN) and `900000` ms.
 
 `persona_set: "personas"` is the tightened worker set. It expects narrow,
 well-decomposed task scopes. If you run the trivial decomposer (`scope: ["."]`)
@@ -455,7 +456,7 @@ Use this checklist to verify a new runtime port implements the protocol correctl
 
 - [ ] Hooks are called after the triggering event, not before.
 - [ ] Hook failure (non-zero exit) is logged as warning — worker continues.
-- [ ] Hook env vars `NPS_TASK_ID`, `NPS_AGENT_ID`, `NPS_STATUS`, `NPS_COST_NPT`, `NPS_EVENT` are set.
+- [ ] Hook env vars `NPS_TASK_ID`, `NPS_AGENT_ID`, `NPS_STATUS`, `NPS_COST_CGN`, `NPS_EVENT` are set.
 - [ ] Missing hook script is treated as no-op (not an error).
 
 ### Git worktree (if implementing worktree isolation)
@@ -502,14 +503,14 @@ claude -p '<prompt>' \
 
 A port replaces this line with the target runtime's equivalent invocation.
 
-### NPT reporting
+### Cognon (CGN) reporting
 
 The reference parses `usage.input_tokens`, `usage.output_tokens`,
 `usage.cache_read_input_tokens`, and `usage.cache_creation_input_tokens` from
-the runtime's JSON output, then converts native token counts to NPT per §8.
+the runtime's JSON output, then converts native token counts to Cognon (CGN) per §8.
 Other runtimes report differently — OpenAI API returns
 `usage.prompt_tokens` + `usage.completion_tokens`; local models may report
-nothing. The port adjusts the parser and the NPT-approximation formula (§8)
+nothing. The port adjusts the parser and the Cognon (CGN)-approximation formula (§8)
 accordingly.
 
 ### Scope permissions
@@ -521,10 +522,10 @@ implements scope enforcement appropriate to its runtime.
 
 ### Budget ceiling
 
-The reference enforces `budget_npt` in the dispatcher by accumulating NPT from
+The reference enforces `budget_cgn` in the dispatcher by accumulating Cognon (CGN) from
 runtime usage events and aborting when the configured soft cap is reached.
 Other runtimes may lack per-event usage reporting; ports must either implement
-equivalent NPT accounting or document that `budget_npt` enforcement is not
+equivalent Cognon (CGN) accounting or document that `budget_cgn` enforcement is not
 available for that runtime.
 
 ### Model selection
