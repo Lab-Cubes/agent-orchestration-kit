@@ -179,6 +179,42 @@ HOOK
     [ ! -f "$KIT_TMPDIR/failed-hook-fired" ]
 }
 
+@test "#207 no-lifecycle: result without claim is rejected and quarantined" {
+    export MOCK_CLAUDE_MODE=no_claim_with_result
+
+    cat > "$KIT_HOOKS/on-task-completed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/completed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-completed.sh"
+    cat > "$KIT_HOOKS/on-task-failed.sh" <<HOOK
+#!/usr/bin/env bash
+touch "$KIT_TMPDIR/failed-hook-fired"
+HOOK
+    chmod +x "$KIT_HOOKS/on-task-failed.sh"
+
+    run_spawner setup coder-01 coder
+    run run_spawner dispatch coder-01 "no lifecycle result test" --category code --time-limit 60
+
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "KIT-DISPATCH-NO-LIFECYCLE"
+    echo "$output" | grep -q "Result ignored"
+
+    local task_id
+    task_id=$(echo "$output" | grep -oE 'task-[a-zA-Z0-9_-]+' | head -1)
+    [ -n "$task_id" ]
+    [ ! -f "$KIT_AGENTS/coder-01/inbox/${task_id}.intent.json" ]
+    [ -f "$KIT_AGENTS/coder-01/done/${task_id}.unclaimed.intent.json" ]
+    [ ! -f "$KIT_AGENTS/coder-01/done/${task_id}.result.json" ]
+    [ -f "$KIT_AGENTS/coder-01/done/${task_id}.unclaimed.result.json" ]
+
+    if [[ -f "$KIT_LOGS/dispatch-costs.csv" ]]; then
+        ! grep -q "$task_id" "$KIT_LOGS/dispatch-costs.csv"
+    fi
+    [ ! -f "$KIT_TMPDIR/completed-hook-fired" ]
+    [ ! -f "$KIT_TMPDIR/failed-hook-fired" ]
+}
+
 @test "#177 mid-task failure: claimed intent without result still uses fallback synthesis" {
     export MOCK_CLAUDE_MODE=claim_no_result
 

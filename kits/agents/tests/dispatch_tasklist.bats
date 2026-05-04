@@ -8,7 +8,7 @@
 # TODO(#66): Once the Decomposer is complete, add tests that drive the full
 # Plan → Decompose → ack → dispatch-tasklist pipeline end-to-end.
 #
-# Hard cap: 11 test cases.
+# Hard cap: 12 test cases.
 
 load 'helpers/build-kit-tree.bash'
 
@@ -157,6 +157,25 @@ PYEOF
     [ "$status" -eq 0 ]
 }
 
+_assert_single_node_failed_identity_violation() {
+    local plan_id="$1"
+    run python3 - "$NPS_TASKLISTS_HOME/$plan_id/task-list-state.json" <<'PYEOF'
+import json, sys
+state = json.load(open(sys.argv[1]))
+node = state["node_states"]["node-a"]
+assert node["status"] == "failed", node
+assert node["task_id"], node
+assert node["result_path"], node
+result = json.load(open(node["result_path"]))
+payload = result["payload"]
+assert payload["status"] == "failed", payload
+assert payload.get("_identity_violation") is True, payload
+assert "RESULT IDENTITY VIOLATION" in (payload.get("error") or ""), payload
+print("ok")
+PYEOF
+    [ "$status" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # 1. Single-task happy path
 # ---------------------------------------------------------------------------
@@ -260,6 +279,28 @@ assert ns['node-c']['status'] == 'pending',  f"node-c: {ns['node-c']['status']}"
 print('ok')
 PYEOF
     [ "$status" -eq 0 ]
+}
+
+@test "#205 task-list: mismatched result id fails node instead of completing" {
+    _write_acked plan-mismatch-id 1 "$FIXTURES_DIR/single-task.json"
+
+    export MOCK_CLAUDE_MODE=mismatched_result_id
+    run run_dt plan-mismatch-id
+    unset MOCK_CLAUDE_MODE
+
+    [ "$status" -eq 1 ]
+    _assert_single_node_failed_identity_violation plan-mismatch-id
+}
+
+@test "#205 task-list: mismatched result sender fails node instead of completing" {
+    _write_acked plan-mismatch-from 1 "$FIXTURES_DIR/single-task.json"
+
+    export MOCK_CLAUDE_MODE=mismatched_result_from
+    run run_dt plan-mismatch-from
+    unset MOCK_CLAUDE_MODE
+
+    [ "$status" -eq 1 ]
+    _assert_single_node_failed_identity_violation plan-mismatch-from
 }
 
 # ---------------------------------------------------------------------------
@@ -444,7 +485,38 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
-# 11. Host agent refs unchanged by dispatch-tasklist runs
+# 11. Empty DAG: exit 2, no workers spawned
+# ---------------------------------------------------------------------------
+
+@test "empty DAG task-list: exits 2, no intent files written" {
+    local tl_dir="$NPS_TASKLISTS_HOME/plan-empty"
+    mkdir -p "$tl_dir"
+    python3 - "$FIXTURES_DIR/single-task.json" "$tl_dir/v1.json" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+d["plan_id"] = "plan-empty"
+d["dag"]["nodes"] = []
+d["dag"]["edges"] = []
+with open(sys.argv[2], "w") as f:
+    json.dump(d, f, indent=2)
+    f.write("\n")
+PYEOF
+
+    run run_dt plan-empty
+    [ "$status" -eq 2 ]
+    echo "$output" | grep -q "task-list DAG has no nodes"
+
+    local total=0
+    for worker in coder-01 coder-02 coder-03; do
+        local n
+        n=$(find "$KIT_AGENTS/$worker/inbox" -maxdepth 1 -name '*.intent.json' 2>/dev/null | wc -l)
+        total=$(( total + n ))
+    done
+    [ "$total" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 12. Host agent refs unchanged by dispatch-tasklist runs
 # ---------------------------------------------------------------------------
 
 @test "host agent refs unchanged by dispatch-tasklist runs" {
