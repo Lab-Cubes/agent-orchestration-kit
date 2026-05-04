@@ -128,7 +128,7 @@ export interface TaskConstraints {
   model?: string;
   time_limit?: number;
   scope?: string[];
-  /** Max CGN the worker may consume for this task (NPS-0 §4.3). */
+  /** Max CGN the worker may consume for this task (NPS-Release token-budget.md). */
   budget_cgn?: number;
 }
 

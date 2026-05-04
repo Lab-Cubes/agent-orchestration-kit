@@ -13,7 +13,7 @@ corresponding hook script. If the script exists and is executable, it runs with:
   - `NPS_TASK_ID` — the full task identifier
   - `NPS_AGENT_ID` — the worker handling the task
   - `NPS_STATUS` — the current lifecycle status (`pending`, `completed`, `failed`)
-  - `NPS_COST_NPT` — NPT consumed by the task (0 for pre-completion events)
+  - `NPS_COST_CGN` — CGN consumed by the task (0 for pre-completion events)
   - `NPS_EVENT` — the event name (`task-claimed`, `task-completed`, `task-failed`)
 - **Stdin:** currently empty; reserved for future task-JSON streaming
 
@@ -39,7 +39,7 @@ anything with a shebang and the executable bit). Language-agnostic by design.
 ```bash
 #!/usr/bin/env bash
 # Log every completion to a local file
-echo "[$(date +%Y-%m-%dT%H:%M:%S)] $NPS_AGENT_ID completed $NPS_TASK_ID — ${NPS_COST_NPT} NPT" \
+echo "[$(date +%Y-%m-%dT%H:%M:%S)] $NPS_AGENT_ID completed $NPS_TASK_ID — ${NPS_COST_CGN} CGN" \
   >> "$HOME/.nps-agents.log"
 ```
 

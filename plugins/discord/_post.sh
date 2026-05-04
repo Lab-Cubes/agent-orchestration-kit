@@ -3,7 +3,7 @@
 # Usage: _post.sh <event_name>
 #   event_name: task_claimed | task_completed | task_failed
 #
-# Env vars (from NPS invoker): NPS_TASK_ID, NPS_AGENT_ID, NPS_COST_NPT, NPS_EVENT
+# Env vars (from NPS invoker): NPS_TASK_ID, NPS_AGENT_ID, NPS_COST_CGN, NPS_EVENT
 
 set -euo pipefail
 
@@ -24,11 +24,11 @@ done < <(python3 - \
     "$EVENT" \
     "${NPS_AGENT_ID:-}" \
     "${NPS_TASK_ID:-unknown}" \
-    "${NPS_COST_NPT:-0}" \
+    "${NPS_COST_CGN:-0}" \
 <<'PYEOF'
 import json, sys
 
-config_path, event, agent_id, task_id, cost_npt = sys.argv[1:]
+config_path, event, agent_id, task_id, cost_cgn = sys.argv[1:]
 d = json.load(open(config_path))
 
 channel = d.get('channel_id', '')
@@ -45,11 +45,11 @@ token        = account_data.get('token', '')
 
 defaults = {
     'task_claimed':   '\U0001f528 {account} claimed {task_id}',
-    'task_completed': '\u2705 {account} completed {task_id} ({cost_npt} NPT)',
+    'task_completed': '\u2705 {account} completed {task_id} ({cost_cgn} CGN)',
     'task_failed':    '\u274c {account} failed {task_id}',
 }
 template = d.get('messages', {}).get(event, defaults.get(event, '{account} {event} {task_id}'))
-message  = template.format(account=display_name, task_id=task_id, cost_npt=cost_npt, event=event)
+message  = template.format(account=display_name, task_id=task_id, cost_cgn=cost_cgn, event=event)
 
 print(f'CHANNEL={channel}')
 print(f'TOKEN={token}')

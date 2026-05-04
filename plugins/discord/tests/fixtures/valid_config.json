@@ -9,7 +9,7 @@
   },
   "messages": {
     "task_claimed":   "\ud83d\udd28 {account} claimed {task_id}",
-    "task_completed": "\u2705 {account} completed {task_id} ({cost_npt} NPT)",
+    "task_completed": "\u2705 {account} completed {task_id} ({cost_cgn} CGN)",
     "task_failed":    "\u274c {account} failed {task_id}"
   }
 }

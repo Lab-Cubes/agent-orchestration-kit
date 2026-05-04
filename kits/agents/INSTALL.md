@@ -60,13 +60,13 @@ Expected output contains: `=== Worker: coder-01 ===` followed by `inbox:`,
 
 Expected behaviour:
 1. Prints a header `NPS NOP — Token-Savings Demonstration`
-2. Runs Path 1 (naive) — takes ~30s, reports NPT + USD
-3. Runs Path 2 (NOP dispatch via researcher-01) — takes ~60s, reports NPT
+2. Runs Path 1 (naive) — takes ~30s, reports Cognon (CGN) + USD
+3. Runs Path 2 (NOP dispatch via researcher-01) — takes ~60s, reports Cognon (CGN)
 4. Prints comparison table with savings percentage
 
-Success criteria: Path 2 NPT < Path 1 NPT by >=50%.
+Success criteria: Path 2 Cognon (CGN) < Path 1 Cognon (CGN) by >=50%.
 
-Typical result on a fresh clone: Path 1 ~7,000 NPT, Path 2 ~1,200 NPT, savings ~83%.
+Typical result on a fresh clone: Path 1 ~7,000 Cognon (CGN), Path 2 ~1,200 Cognon (CGN), savings ~83%.
 
 ## Dispatch a real task
 
@@ -89,7 +89,7 @@ Expected output's "Latest result:" section shows:
 - Task: `task-operator-{timestamp}`
 - Status: `completed`
 - Duration: number of seconds
-- Cost NPT: integer
+- Cost Cognon (CGN): integer
 - Summary: the worker's 3-sentence description
 
 ## Configuration
@@ -97,7 +97,7 @@ Expected output's "Latest result:" section shows:
 Edit these files only if the operator requests changes:
 
 - `.env` — runtime paths. Defaults work for single-machine use.
-- `config.json` — issuer domain, default model, NPT budgets. The `issuer_domain`
+- `config.json` — issuer domain, default model, Cognon (CGN) budgets. The `issuer_domain`
   defaults to `dev.localhost`; change it to your org's domain when deploying
   beyond dev experimentation.
 

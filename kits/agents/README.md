@@ -12,7 +12,7 @@ see [§11 of the implementation spec](./docs/implementation-spec.md#11-runtime-s
 **Why use it:**
 - **Token savings.** Workers read context from their local scope. Orchestrators
   don't have to stuff the whole context into a prompt — they write a small intent
-  message. See `bin/benchmark` for a live NPT comparison on your machine.
+  message. See `bin/benchmark` for a live Cognon (CGN) comparison on your machine.
 - **Runtime-agnostic protocol.** The mailbox protocol works with any agent runtime
   that can read a file and write a result. This kit ships a reference wrapper for
   Claude Code CLI; the same pattern wraps any other runtime.
@@ -32,7 +32,7 @@ cd agent-orchestration-kit/kits/agents
 
 That's it. `bin/setup` creates your runtime directories and three default
 workers. `bin/benchmark` runs a canonical task two ways (naive vs NOP) and
-shows NPT saved on your machine.
+shows Cognon (CGN) saved on your machine.
 
 **Prerequisites:** Node 22+, pnpm 10+, git, Python 3 (for JSON processing in shell),
 and an AI agent CLI. The reference implementation uses
@@ -68,7 +68,7 @@ its scope. Their conversation is the task intent + result, not the whole context
 ./scripts/spawn-agent.sh dispatch coder-01 "Fix null check in auth.ts" \
     --scope /path/to/your/repo \
     --category code \
-    --budget 30000   # NPT
+    --budget 30000   # Cognon (CGN)
 ```
 
 Auto-creates a git worktree on branch `agent/coder-01/task-…`. Worker operates
@@ -95,7 +95,7 @@ Create `templates/personas/{type}.md` following the pattern of `coder.md`,
 
 - `.env` — override runtime paths if you want a custom layout
   (`NPS_AGENTS_HOME`, `NPS_WORKTREES_HOME`, `NPS_LOGS_HOME`)
-- `config.json` — issuer domain, default model, NPT budgets, time limits
+- `config.json` — issuer domain, default model, Cognon (CGN) budgets, time limits
 
 Both copied from `.env.example` / `config.example.json` on first setup.
 
@@ -140,9 +140,10 @@ Discord plugin: `cd ../../plugins/discord && ./install.sh`.
 ## Cost
 
 Runs on your runtime subscription — no API keys managed by this kit.
-NPT budgets cap per-task spend (NPS-0 §4.3 standardized unit, approximated as
-input + output + cache_read tokens for v0.1.0; full NPS-0 §4.3 normalization
-across model tiers arrives in v0.2.0).
+Cognon (CGN) budgets cap per-task spend using the NPS-Release
+`spec/token-budget.md` v0.3 Cognon Budget Specification. The v0.1.0 release
+approximated this as input + output + cache_read tokens; v0.2.0 uses
+four-channel normalized CGN accounting across model tiers.
 
 ## Status
 

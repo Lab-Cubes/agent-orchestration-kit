@@ -48,7 +48,7 @@ teardown() {
 
     export NPS_AGENT_ID="coder-01"
     export NPS_TASK_ID="task-ua-test"
-    export NPS_COST_NPT="0"
+    export NPS_COST_CGN="0"
 
     run "$PLUGIN_TMPDIR/_post.sh" task_claimed
     [ "$status" -eq 0 ]
@@ -56,14 +56,14 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# 3. Placeholder substitution: {task_id}, {account}, {cost_npt}
+# 3. Placeholder substitution: {task_id}, {account}, {cost_cgn}
 # ---------------------------------------------------------------------------
-@test "_post.sh substitutes {task_id}, {account}, {cost_npt} in the message" {
+@test "_post.sh substitutes {task_id}, {account}, {cost_cgn} in the message" {
     cp "$FIXTURES/valid_config.json" "$PLUGIN_TMPDIR/config.json"
 
     export NPS_AGENT_ID="coder-01"
     export NPS_TASK_ID="task-sub-test-42"
-    export NPS_COST_NPT="3.14"
+    export NPS_COST_CGN="3.14"
 
     run "$PLUGIN_TMPDIR/_post.sh" task_completed
     [ "$status" -eq 0 ]
@@ -83,7 +83,7 @@ teardown() {
 
     export NPS_AGENT_ID="coder-01"
     export NPS_TASK_ID="task-token-test"
-    export NPS_COST_NPT="0"
+    export NPS_COST_CGN="0"
 
     run "$PLUGIN_TMPDIR/_post.sh" task_claimed
     [ "$status" -eq 0 ]
@@ -106,7 +106,7 @@ PYEOF
 
     export NPS_AGENT_ID="coder-01"
     export NPS_TASK_ID="task-nochannel"
-    export NPS_COST_NPT="0"
+    export NPS_COST_CGN="0"
 
     run "$PLUGIN_TMPDIR/_post.sh" task_claimed
     [ "$status" -eq 0 ]
@@ -121,7 +121,7 @@ PYEOF
 
     export NPS_AGENT_ID="coder-01"
     export NPS_TASK_ID="task-429-retry"
-    export NPS_COST_NPT="0"
+    export NPS_COST_CGN="0"
     export MOCK_CURL_SCRIPT="429,200"
 
     run "$PLUGIN_TMPDIR/_post.sh" task_claimed
@@ -137,7 +137,7 @@ PYEOF
 
     export NPS_AGENT_ID="coder-01"
     export NPS_TASK_ID="task-429-cap"
-    export NPS_COST_NPT="0"
+    export NPS_COST_CGN="0"
     export MOCK_CURL_SCRIPT="429,429,429,429,429"
 
     run "$PLUGIN_TMPDIR/_post.sh" task_claimed
@@ -153,7 +153,7 @@ PYEOF
 
     export NPS_AGENT_ID="coder-01"
     export NPS_TASK_ID="task-500-noretry"
-    export NPS_COST_NPT="0"
+    export NPS_COST_CGN="0"
     export MOCK_CURL_SCRIPT="500"
 
     run "$PLUGIN_TMPDIR/_post.sh" task_claimed
@@ -169,7 +169,7 @@ PYEOF
 
     export NPS_AGENT_ID="coder-01"
     export NPS_TASK_ID="task-200-happy"
-    export NPS_COST_NPT="0"
+    export NPS_COST_CGN="0"
     export MOCK_CURL_SCRIPT="200"
 
     run "$PLUGIN_TMPDIR/_post.sh" task_claimed

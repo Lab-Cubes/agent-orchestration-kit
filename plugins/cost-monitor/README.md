@@ -1,7 +1,7 @@
 # @nps-kit/plugin-cost-monitor
 
 Cost visibility plugin for [`@nps-kit/agents`](../../kits/agents/). Logs per-task
-NPT/USD spend to stderr at completion, and provides a CLI report over the full
+CGN/USD spend to stderr at completion, and provides a CLI report over the full
 dispatch history.
 
 Zero config — works with sensible defaults out of the box.
@@ -11,7 +11,7 @@ Zero config — works with sensible defaults out of the box.
 ```bash
 cd plugins/cost-monitor
 
-# (Optional) override NPT→USD rate or log path:
+# (Optional) override CGN→USD rate or log path:
 # cp config.example.json config.json && $EDITOR config.json
 
 ./install.sh
@@ -28,15 +28,15 @@ bin/report
 When a task completes, `on-task-completed.sh` writes to stderr:
 
 ```
-[cost] coder-01 task-operator-20260418-201245: 1.23 NPT (~$0.0012) · 136s · code
+[cost] coder-01 task-operator-20260418-201245: 1.23 CGN (~$0.0012) · 136s · code
 ```
 
 | Field | Source |
 |-------|--------|
 | `agent` | `$NPS_AGENT_ID` |
 | `task_id` | `$NPS_TASK_ID` |
-| `NPT` | `$NPS_COST_NPT` |
-| `~$USD` | NPT × `npt_usd_rate` from config (default `0.001`) |
+| `CGN` | `$NPS_COST_CGN` |
+| `~$USD` | CGN × `cgn_usd_rate` from config (default `0.001`) |
 | `duration` | `result.json` payload (falls back to `-`) |
 | `category` | `result.json` payload (falls back to `-`) |
 
@@ -48,7 +48,7 @@ bin/report [--log PATH] [--rate RATE]
 
 Prints:
 
-- All-time and today totals (tasks + USD + NPT)
+- All-time and today totals (tasks + USD + CGN)
 - Cost by agent (all-time)
 - Cost by category (all-time)
 - Cost by agent (today)
@@ -60,8 +60,8 @@ Prints:
 ────────────────────────────────────────────────────────────
   All-time    79 tasks   $54.2381
   Today        2 tasks    $1.0024
-  All-time  54238.1 NPT  (at $0.001/NPT)
-  Today     1002.4 NPT
+  All-time  54238.1 CGN  (at $0.001/CGN)
+  Today     1002.4 CGN
 
 By agent (all-time)
 ────────────────────────────────────────────────────────────
@@ -75,14 +75,14 @@ By agent (all-time)
 
 ```json
 {
-  "npt_usd_rate": 0.001,
+  "cgn_usd_rate": 0.001,
   "log_path": "/custom/path/to/dispatch-costs.csv"
 }
 ```
 
 | Field | Default | Meaning |
 |-------|---------|---------|
-| `npt_usd_rate` | `0.001` | NPT→USD conversion rate for `~$USD` display |
+| `cgn_usd_rate` | `0.001` | CGN→USD conversion rate for `~$USD` display |
 | `log_path` | `../../nop/logs/dispatch-costs.csv` (relative to plugin dir) | Override CSV path |
 
 Both fields are optional. No config file = defaults used silently.
