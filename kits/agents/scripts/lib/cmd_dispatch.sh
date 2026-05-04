@@ -543,6 +543,39 @@ except Exception:
     sys.exit(1)
 " 2>/dev/null || { warn "result.json invalid or missing required fields — marking error"; status_val="error"; }
 
+    # --- Result identity binding (#205): result must belong to this dispatch ---
+    if [[ -f "$agent_result" ]]; then
+        local result_identity_error=""
+        result_identity_error=$(RESULT_FILE="$agent_result" TASK_ID="$task_id" EXPECTED_FROM="urn:nps:agent:${ISSUER_DOMAIN}:${agent_id}" python3 - <<'PYEOF' 2>/dev/null
+import json, os, sys
+path = os.environ['RESULT_FILE']
+expected_id = os.environ['TASK_ID']
+expected_from = os.environ['EXPECTED_FROM']
+d = json.load(open(path))
+p = d.get('payload') or {}
+errors = []
+if p.get('id') != expected_id:
+    errors.append(f"payload.id {p.get('id')!r} does not match task_id {expected_id!r}")
+if p.get('from') != expected_from:
+    errors.append(f"payload.from {p.get('from')!r} does not match worker NID {expected_from!r}")
+if errors:
+    p['status'] = 'failed'
+    p['error'] = (p.get('error') or '') + ' RESULT IDENTITY VIOLATION: ' + '; '.join(errors)
+    p['_identity_violation'] = True
+    d['payload'] = p
+    open(path, 'w').write(json.dumps(d, indent=2) + '\n')
+    print('\n'.join(errors))
+PYEOF
+        ) || true
+        if [[ -n "$result_identity_error" ]]; then
+            warn "RESULT IDENTITY VIOLATION:"
+            while IFS= read -r v; do
+                warn "  - $v"
+            done <<< "$result_identity_error"
+            status_val="error"
+        fi
+    fi
+
     # --- Scope validation (#34): reject files_changed outside constraints.scope ---
     if [[ -n "$original_scope" && -f "$agent_result" ]]; then
         local scope_violations=""

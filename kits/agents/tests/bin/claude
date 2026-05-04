@@ -9,6 +9,8 @@
 #                    (used for dispatch no-lifecycle tests)
 #   claim_no_result — claim/archive intent but write no result.json
 #                    (used for fallback synthesis tests)
+#   mismatched_result_id — writes result.json whose payload.id is not task id
+#   mismatched_result_from — writes result.json whose payload.from is not worker NID
 #   slow           — sleeps 10s before emitting anything (for time_limit tests)
 #   budget_exceeded — emits an assistant event reporting 5M tokens then sleeps
 #                    (dispatcher kills it once it reads the token count)
@@ -114,6 +116,36 @@ case "$MODE" in
         _claim_task "$@"
         printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
         printf '{"type":"result","subtype":"error_during_execution","is_error":true,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"Mock error occurred during task execution.","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
+    mismatched_result_id)
+        _write_result "completed" "Mock worker wrote mismatched task id." "$@"
+        if [[ -n "${TASK_ID:-}" ]]; then
+            python3 - "$MAILBOX_BASE/done/${TASK_ID}.result.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+d = json.load(open(path))
+d["payload"]["id"] = "task-wrong-identity-20260101-000000"
+open(path, "w").write(json.dumps(d, indent=2) + "\n")
+PYEOF
+        fi
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"mismatched task id mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
+        exit 0
+        ;;
+    mismatched_result_from)
+        _write_result "completed" "Mock worker wrote mismatched sender." "$@"
+        if [[ -n "${TASK_ID:-}" ]]; then
+            python3 - "$MAILBOX_BASE/done/${TASK_ID}.result.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+d = json.load(open(path))
+d["payload"]["from"] = "urn:nps:agent:test.localhost:researcher-01"
+open(path, "w").write(json.dumps(d, indent=2) + "\n")
+PYEOF
+        fi
+        printf '{"type":"assistant","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-6","usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"session_id":"mock"}\n'
+        printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":100,"num_turns":1,"result":"mismatched sender mock","session_id":"mock","total_cost_usd":0.0,"usage":{"input_tokens":100,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"permission_denials":[]}\n'
         exit 0
         ;;
     slow)
@@ -320,7 +352,7 @@ REOF
         exit 0
         ;;
     *)
-        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|no_claim|claim_no_result|timeout|error|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|scope_violation|scope_clean|commit_to_scope|commit_to_add_dir|malformed_result_missing_fields|malformed_result_invalid_json|pushback)" >&2
+        echo "mock claude: unknown MOCK_CLAUDE_MODE='$MODE' (expected happy|no_claim|claim_no_result|timeout|error|mismatched_result_id|mismatched_result_from|slow|budget_exceeded|cache_creation|rate_check|sigint_handler|scope_violation|scope_clean|commit_to_scope|commit_to_add_dir|malformed_result_missing_fields|malformed_result_invalid_json|pushback)" >&2
         exit 2
         ;;
 esac

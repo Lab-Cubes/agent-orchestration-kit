@@ -208,6 +208,56 @@ print('ok')
     [ "$status_field" = "error" ]
 }
 
+@test "#205 result.json: payload.id mismatch surfaces error status" {
+    export MOCK_CLAUDE_MODE=mismatched_result_id
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "mismatched result id" --category code --time-limit 60
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
+    [ "$status_field" = "error" ]
+
+    local result_file
+    result_file=$(ls "$KIT_AGENTS/coder-01/done/"*.result.json 2>/dev/null | head -1)
+    [ -f "$result_file" ]
+
+    run python3 -c "
+import json
+d = json.load(open('$result_file'))
+assert d['payload']['status'] == 'failed'
+assert d['payload'].get('_identity_violation') is True
+assert 'payload.id' in d['payload'].get('error', '')
+print('ok')
+"
+    [ "$status" -eq 0 ]
+}
+
+@test "#205 result.json: payload.from mismatch surfaces error status" {
+    export MOCK_CLAUDE_MODE=mismatched_result_from
+
+    run_spawner setup coder-01 coder
+    run_spawner dispatch coder-01 "mismatched result sender" --category code --time-limit 60
+
+    local status_field
+    status_field=$(tail -n1 "$KIT_LOGS/dispatch-costs.csv" | awk -F',' '{gsub(/"/, "", $12); print $12}')
+    [ "$status_field" = "error" ]
+
+    local result_file
+    result_file=$(ls "$KIT_AGENTS/coder-01/done/"*.result.json 2>/dev/null | head -1)
+    [ -f "$result_file" ]
+
+    run python3 -c "
+import json
+d = json.load(open('$result_file'))
+assert d['payload']['status'] == 'failed'
+assert d['payload'].get('_identity_violation') is True
+assert 'payload.from' in d['payload'].get('error', '')
+print('ok')
+"
+    [ "$status" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # Sequential dispatch uniqueness
 # ---------------------------------------------------------------------------
