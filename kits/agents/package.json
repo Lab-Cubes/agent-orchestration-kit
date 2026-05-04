@@ -11,6 +11,7 @@
   "scripts": {
     "setup": "./bin/setup",
     "benchmark": "./bin/benchmark",
+    "test": "bash -lc 'command -v bats >/dev/null || { echo \"bats not found; install bats-core to run kits/agents tests\" >&2; exit 1; }; bats tests'",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
