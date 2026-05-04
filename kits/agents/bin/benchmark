@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# bin/benchmark — NPT benchmark for naive vs NOP token usage.
+# bin/benchmark — CGN benchmark for naive vs NOP token usage.
 #
 # Runs a canonical research task two ways:
 #   1. Naive path — orchestrator sends full context to Claude as prompt tokens
 #   2. NOP path   — orchestrator sends a small intent message, worker reads
 #                   context from its scope on-demand
 #
-# Reports NPT consumed by each path plus the delta. Real measurement on the
+# Reports CGN consumed by each path plus the delta. Real measurement on the
 # adopter's machine, not hand-counted.
 #
 # Requires: ./bin/setup to have completed first.
@@ -59,7 +59,7 @@ import json, sys
 plan_id, plan_file, input_file = sys.argv[1], sys.argv[2], sys.argv[3]
 plan_text = (
     "---\nplan_id: " + plan_id +
-    "\ntitle: NPT benchmark plan\nstatus: pending\ncreated_at: 2026-01-01T00:00:00Z\n---\n\nNPT benchmark plan body."
+    "\ntitle: CGN benchmark plan\nstatus: pending\ncreated_at: 2026-01-01T00:00:00Z\n---\n\nCGN benchmark plan body."
 )
 open(plan_file, 'w').write(plan_text)
 json.dump({
@@ -152,7 +152,7 @@ hi "╭────────────────────────�
 hi "│  Token-Savings Benchmark                                    │"
 hi "╰────────────────────────────────────────────────────────────╯"
 hi ""
-echo "Running the same task two ways and comparing NPT consumed."
+echo "Running the same task two ways and comparing CGN consumed."
 echo "Task: one-paragraph summary of $(basename "$SUBJECT_FILE")"
 echo ""
 
@@ -160,7 +160,7 @@ echo ""
 # PATH 1 — Naive orchestration
 #
 # The orchestrator inlines the full document into the prompt, so every
-# input token counts against NPT. This is how agents usually pass context
+# input token counts against CGN. This is how agents usually pass context
 # between each other today.
 # ---------------------------------------------------------------------------
 
@@ -194,7 +194,7 @@ nop_out="$BENCH_LOGS/bench-nop.json"
 mkdir -p "$BENCH_LOGS"
 
 # Run both paths concurrently. Each gets its own usage block in the JSON
-# response; NPT measurement is per-call so concurrency doesn't affect it.
+# response; CGN measurement is per-call so concurrency doesn't affect it.
 parallel_start=$(date +%s)
 
 (
@@ -221,7 +221,7 @@ parallel_end=$(date +%s)
 parallel_duration=$((parallel_end - parallel_start))
 say "Both paths done in ${parallel_duration}s (concurrent)."
 
-# Extract Path 1 NPT from naive call's JSON
+# Extract Path 1 CGN from naive call's JSON
 naive_stats=$(python3 - "$naive_out" <<'PYEOF' 2>/dev/null || echo "0|0.0000"
 import json, sys
 try:
@@ -229,36 +229,36 @@ try:
 except Exception:
     d = {}
 u = d.get('usage') or {}
-npt = (u.get('input_tokens') or 0) + (u.get('output_tokens') or 0) + (u.get('cache_read_input_tokens') or 0)
-print(f"{npt}|{d.get('total_cost_usd', 0):.4f}")
+cgn = (u.get('input_tokens') or 0) + (u.get('output_tokens') or 0) + (u.get('cache_read_input_tokens') or 0)
+print(f"{cgn}|{d.get('total_cost_usd', 0):.4f}")
 PYEOF
 )
-naive_npt="${naive_stats%%|*}"
+naive_cgn="${naive_stats%%|*}"
 naive_usd="${naive_stats##*|}"
 
-# Extract Path 2 NPT from researcher-01's result.json
+# Extract Path 2 CGN from researcher-01's result.json
 nop_result_dir="$BENCH_AGENTS/researcher-01/done"
 latest_result=$(ls -t "$nop_result_dir"/*.result.json 2>/dev/null | head -1 || echo "")
 if [[ -n "$latest_result" ]]; then
-    nop_npt=$(python3 - "$latest_result" <<'PYEOF' 2>/dev/null || echo "0"
+    nop_cgn=$(python3 - "$latest_result" <<'PYEOF' 2>/dev/null || echo "0"
 import json, sys
 d = json.load(open(sys.argv[1]))
-print(d.get('payload', {}).get('cost_npt', 0))
+print(d.get('payload', {}).get('cost_cgn', 0))
 PYEOF
     )
 else
-    nop_npt="0"
+    nop_cgn="0"
 fi
 
-say "  Path 1: ${naive_npt} NPT (~\$${naive_usd})"
-say "  Path 2: ${nop_npt} NPT"
+say "  Path 1: ${naive_cgn} CGN (~\$${naive_usd})"
+say "  Path 2: ${nop_cgn} CGN"
 
 # ---------------------------------------------------------------------------
 # Comparison
 # ---------------------------------------------------------------------------
 
-if [[ "$naive_npt" -gt 0 && "$nop_npt" -gt 0 ]]; then
-    savings_pct=$(python3 -c "print(f'{(1 - $nop_npt/$naive_npt)*100:.1f}')")
+if [[ "$naive_cgn" -gt 0 && "$nop_cgn" -gt 0 ]]; then
+    savings_pct=$(python3 -c "print(f'{(1 - $nop_cgn/$naive_cgn)*100:.1f}')")
 else
     savings_pct="n/a"
 fi
@@ -267,12 +267,12 @@ echo ""
 hi "╭────────────────────────────────────────────────────────────╮"
 hi "│  Result                                                     │"
 hi "╰────────────────────────────────────────────────────────────╯"
-printf "  Naive (prompt-embedded context):  %10s NPT\n" "$naive_npt"
-printf "  NPS NOP (mailbox dispatch):       %10s NPT\n" "$nop_npt"
+printf "  Naive (prompt-embedded context):  %10s CGN\n" "$naive_cgn"
+printf "  NPS NOP (mailbox dispatch):       %10s CGN\n" "$nop_cgn"
 printf "  Savings:                          %10s%%\n" "$savings_pct"
 echo ""
 echo "Notes:"
-echo "  • NPT is the NPS-0 §4.3 standardized token unit. This kit approximates it"
+echo "  • CGN is the NPS-Release token-budget.md standardized token unit. This kit approximates it"
 echo "    as (input + output + cache_read) tokens from Claude's JSON output;"
 echo "    cross-SDK interoperability per the full token-budget.md spec lands in v0.2.0."
 echo "  • Both paths used Claude Sonnet. Savings compound as context grows."

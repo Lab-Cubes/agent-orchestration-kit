@@ -25,7 +25,7 @@ Expected last-line output:
 
 ## Optional: override defaults
 
-If NPT→USD rate or log path differs from the defaults:
+If CGN→USD rate or log path differs from the defaults:
 
 ```bash
 cp config.example.json config.json
@@ -33,7 +33,7 @@ $EDITOR config.json
 ```
 
 Fields:
-- `npt_usd_rate` — float, default `0.001` (1 NPT = $0.001 USD)
+- `cgn_usd_rate` — float, default `0.001` (1 CGN = $0.001 USD)
 - `log_path` — absolute or relative path to `dispatch-costs.csv`; default is
   `../../nop/logs/dispatch-costs.csv` relative to the plugin directory
 
@@ -59,7 +59,7 @@ cd ../../kits/agents
 Expected output (may appear after task completes):
 
 ```
-[cost] coder-01 task-operator-YYYYMMDD-HHMMSS: 0.12 NPT (~$0.0001) · 42s · -
+[cost] coder-01 task-operator-YYYYMMDD-HHMMSS: 0.12 CGN (~$0.0001) · 42s · -
 ```
 
 If nothing appears:
@@ -94,9 +94,9 @@ Re-install by running `./install.sh` again.
 
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
-| No `[cost]` lines in output | Hook output suppressed by spawn-agent.sh | Invoke hook directly to test: `NPS_AGENT_ID=coder-01 NPS_TASK_ID=test NPS_COST_NPT=1 ./on-task-completed.sh` |
+| No `[cost]` lines in output | Hook output suppressed by spawn-agent.sh | Invoke hook directly to test: `NPS_AGENT_ID=coder-01 NPS_TASK_ID=test NPS_COST_CGN=1 ./on-task-completed.sh` |
 | `Error: log file not found` in report | Wrong CSV path | Set `log_path` in `config.json` |
-| `~$0.0000` for all tasks | `npt_usd_rate` not set | Check `config.json` or use `--rate` flag |
+| `~$0.0000` for all tasks | `cgn_usd_rate` not set | Check `config.json` or use `--rate` flag |
 | duration/category shows `-` | result.json not found at expected path | Expected at `kits/agents/agents/{agent_id}/done/{task_id}.result.json` |
 
 Hook failures never block worker lifecycle — the worker completes its task

@@ -38,8 +38,8 @@ bats tests/test_install.bats
 
 | File | Coverage |
 |------|----------|
-| `test_post.bats` | `_post.sh` — silent fallback when config is missing, User-Agent header, placeholder substitution (`{task_id}`, `{account}`, `{cost_npt}`), token from `accounts` block, empty `channel_id` suppression |
-| `test_hooks.bats` | `on-task-claimed.sh`, `on-task-completed.sh`, `on-task-failed.sh` — correct event name passed to `_post.sh`, exit 0 with no config (hook never blocks worker), NPS env vars (`NPS_TASK_ID`, `NPS_AGENT_ID`, `NPS_COST_NPT`) flow through |
+| `test_post.bats` | `_post.sh` — silent fallback when config is missing, User-Agent header, placeholder substitution (`{task_id}`, `{account}`, `{cost_cgn}`), token from `accounts` block, empty `channel_id` suppression |
+| `test_hooks.bats` | `on-task-claimed.sh`, `on-task-completed.sh`, `on-task-failed.sh` — correct event name passed to `_post.sh`, exit 0 with no config (hook never blocks worker), NPS env vars (`NPS_TASK_ID`, `NPS_AGENT_ID`, `NPS_COST_CGN`) flow through |
 | `test_install.bats` | `install.sh` — copies hook files, sets them executable, idempotency (double-run safe), graceful failure when target dir or config is missing, `--uninstall` removes hooks and preserves config |
 
 ## Mock strategy

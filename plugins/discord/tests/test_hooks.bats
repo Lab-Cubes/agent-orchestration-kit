@@ -100,11 +100,11 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# NPS env vars (NPS_TASK_ID, NPS_AGENT_ID, NPS_COST_NPT) flow through hooks
+# NPS env vars (NPS_TASK_ID, NPS_AGENT_ID, NPS_COST_CGN) flow through hooks
 # into _post.sh — verified via mock curl + real _post.sh + fixture config
 # ---------------------------------------------------------------------------
 
-@test "hooks pass NPS_TASK_ID, NPS_AGENT_ID, NPS_COST_NPT through to _post.sh" {
+@test "hooks pass NPS_TASK_ID, NPS_AGENT_ID, NPS_COST_CGN through to _post.sh" {
     # Set up a hook dir with real _post.sh + fixture config + mock curl
     ENVVAR_TMPDIR="$(mktemp -d)"
     for f in on-task-claimed.sh _post.sh; do
@@ -120,7 +120,7 @@ teardown() {
 
     export NPS_TASK_ID="envvar-test-task-007"
     export NPS_AGENT_ID="coder-01"
-    export NPS_COST_NPT="2.5"
+    export NPS_COST_CGN="2.5"
 
     run "$ENVVAR_TMPDIR/on-task-claimed.sh"
     [ "$status" -eq 0 ]

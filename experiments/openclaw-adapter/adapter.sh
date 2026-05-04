@@ -132,8 +132,8 @@ def emit(event_type, data=None):
     with open(event_log, "a") as f:
         f.write(json.dumps(envelope) + "\n")
 
-def _npt(input_tokens, output_tokens):
-    """Simplified NPT computation per NPS-0 §4.3 — sum of input + output tokens."""
+def _cgn(input_tokens, output_tokens):
+    """Simplified CGN computation per NPS-Release token-budget.md — sum of input + output tokens."""
     return input_tokens + output_tokens
 
 # -------------------------------------------------------------------------
@@ -184,7 +184,7 @@ if result.returncode == 0:
     cache_read = usage.get("cacheRead", last_call_usage.get("cacheRead", 0))
     input_tokens = usage.get("input", 0) + cache_read
     output_tokens = usage.get("output", 0)
-    npt_used = _npt(input_tokens, output_tokens)
+    cgn_used = _cgn(input_tokens, output_tokens)
 
     session_id = agent_meta.get("sessionId", "")
     payloads = response.get("result", {}).get("payloads", [])
@@ -202,7 +202,7 @@ if result.returncode == 0:
             "model": model,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
-            "npt_used": npt_used,
+            "cgn_used": cgn_used,
             "wall_clock_ms": wall_clock_ms,
         }
     })

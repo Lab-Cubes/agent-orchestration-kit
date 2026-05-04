@@ -13,7 +13,7 @@
   ],
 
   "default_budget_cgn": 40000,
-  "$comment_budget": "Default per-task CGN ceiling. CGN = Cognon (raw sum of input + output + cache_read + cache_creation tokens, multiplied by model-family exchange rate, per NPS-0 §4.3). Override per-dispatch via --budget or per-category via category_budget_cgn below.",
+  "$comment_budget": "Default per-task CGN ceiling. CGN = Cognon (raw sum of input + output + cache_read + cache_creation tokens, multiplied by model-family exchange rate, per NPS-Release token-budget.md). Override per-dispatch via --budget or per-category via category_budget_cgn below.",
 
   "max_budget_cgn_per_node": 200000,
   "$comment_max_budget_cgn_per_node": "Semantic-validator ceiling for Decomposer-emitted task-list node budgets. Rejects implausibly high budget_cgn values before dispatch.",

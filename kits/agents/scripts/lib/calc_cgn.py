@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# calc_cgn — convert raw usage dict to CGN (NPS-0 §4.3).
+# calc_cgn — convert raw usage dict to CGN (NPS-Release token-budget.md).
 # Usage: from calc_cgn import calc_cgn, detect_family
 import math
 
