@@ -7,10 +7,10 @@ Guidance for Codex (Codex.ai/code) working in this repository.
 Before authoring or briefing work in this kit, read the canonical kit docs in this order — they own the contracts that workers and the dispatcher implement:
 
 - [`kits/agents/docs/architecture.md`](kits/agents/docs/architecture.md) — four-layer model (Plan → Decompose → Dispatch → Execute), task-list schema, gate boundaries, NPS alignment.
-- [`kits/agents/docs/implementation-spec.md`](kits/agents/docs/implementation-spec.md) — wire-format runbook (intent + result schemas, state machine, hook contract, NPT formula, port-verification checklist).
+- [`kits/agents/docs/implementation-spec.md`](kits/agents/docs/implementation-spec.md) — wire-format runbook (intent + result schemas, state machine, hook contract, Cognon (CGN) formula, port-verification checklist).
 - [`kits/agents/templates/AGENT-CLAUDE.md`](kits/agents/templates/AGENT-CLAUDE.md) — worker bootstrap; **Change Discipline** (surgical edits, simplicity bar, pushback over silent expansion) + **Debug Discipline** (3-failure / 15-min / repeat-question check-in triggers).
 - [`kits/agents/templates/personas/{coder,critic,researcher}.md`](kits/agents/templates/personas) — per-role overlays with anti-drift triggers, epistemic tagging (`[VERIFIED]` / `[OBSERVED]` / `[INFERRED]` / `[INSUFFICIENT_EVIDENCE]`), and termination heuristics.
-- [`kits/agents/docs/NPT.md`](kits/agents/docs/NPT.md) — NPT token accounting details.
+- [`kits/agents/docs/Cognon.md`](kits/agents/docs/Cognon.md) — Cognon (CGN) token accounting details.
 
 Without these, briefs over-prescribe behaviour the worker bootstrap already owns.
 
@@ -46,7 +46,7 @@ cd kits/agents && npm run typecheck
 
 # Plugins
 plugins/discord/install.sh               # Discord notification hooks
-plugins/cost-monitor/install.sh          # per-task NPT/USD logging
+plugins/cost-monitor/install.sh          # per-task Cognon (CGN)/USD logging
 bin/report                               # cost report CLI (after cost-monitor install)
 ```
 
@@ -115,7 +115,7 @@ Every state transition is a filesystem rename. The worker always writes a result
 Two JSON schemas govern orchestrator↔worker communication ([`kits/agents/src/nop-types.ts`](kits/agents/src/nop-types.ts)):
 
 - **`IntentMessage`** (`_ncp: 1`, `type: "intent"`) — orchestrator writes to `inbox/`. Carries task ID, worker NID (`urn:nps:agent:{domain}:{id}`), intent verb, constraints (scope, budget, time limit, model), context (files, knowledge, branch), and optional `plan_id` (post-#74 — required once Dispatcher is the only emitter).
-- **`ResultMessage`** (`type: "result"`) — worker writes to `done/`. Carries status, files changed, commits, follow-up tasks, `cost_npt`, error if any, and `pushback_reason` for `BLOCKED` results.
+- **`ResultMessage`** (`type: "result"`) — worker writes to `done/`. Carries status, files changed, commits, follow-up tasks, `cost_cgn`, error if any, and `pushback_reason` for `BLOCKED` results.
 
 File naming: `{payload.id}.intent.json` / `{payload.id}.result.json`.
 
@@ -158,13 +158,13 @@ Worker instances live under `kits/agents/agents/` as starter configs; the runtim
 
 Hooks fire after task state transitions. They are language-agnostic executables in `kits/agents/hooks/`. Hook failures are suppressed — they never block the worker.
 
-Environment variables passed to every hook: `NPS_TASK_ID`, `NPS_AGENT_ID`, `NPS_STATUS`, `NPS_COST_NPT`, `NPS_EVENT`.
+Environment variables passed to every hook: `NPS_TASK_ID`, `NPS_AGENT_ID`, `NPS_STATUS`, `NPS_COST_CGN`, `NPS_EVENT`.
 
 Plugins (`plugins/discord/`, `plugins/cost-monitor/`) symlink their hooks into the hooks directory via their `install.sh`.
 
 ### Token efficiency (the core value proposition)
 
-Naive orchestration inlines full context into the prompt — every token counts against the budget. NOP separates the intent (~200 tokens) from the context (worker reads from scope on demand). `bin/benchmark` measures this delta on live hardware (~83% NPT savings on the typical 3-sentence describe-this-kit task).
+Naive orchestration inlines full context into the prompt — every token counts against the budget. NOP separates the intent (~200 tokens) from the context (worker reads from scope on demand). `bin/benchmark` measures this delta on live hardware (~83% Cognon (CGN) savings on the typical 3-sentence describe-this-kit task).
 
 ## NPS spec source of truth
 

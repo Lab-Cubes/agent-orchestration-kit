@@ -14,7 +14,7 @@ This document describes the architectural model of Orch-kit: the layers, artifac
 
 Orch-kit is a reference implementation of NPS (Neural Protocol Suite), centred on NOP (NPS-5, Neural Orchestration Protocol) for multi-agent task dispatch. It demonstrates how NPS protocols compose to enable:
 
-- Cross-vendor agent cooperation under a single NPT budget (NPS-0 + NPS-3 + NPS-5)
+- Cross-vendor agent cooperation under a single Cognon (CGN) budget (NPS-0 + NPS-3 + NPS-5)
 - Identity-enforced scope carving at delegation time (NPS-3 NIP)
 - DAG-based task orchestration with typed data flow (NPS-5 NOP)
 - Filesystem-based transport as a simpler alternative to `nwp://` for local single-host deployments
@@ -95,7 +95,7 @@ $NPS_STATE_HOME/
 │   ├── {task-id}/                              # active per-task worktree
 │   └── superseded/{plan-id}/v{N}/{agent-id}/{task-id}/   # on re-decompose supersede
 └── logs/
-    └── dispatch-costs.csv                      # pre-existing NPT CSV log
+    └── dispatch-costs.csv                      # pre-existing Cognon (CGN) CSV log
 ```
 
 `$NPS_STATE_HOME` falls back to `$XDG_STATE_HOME/nps-kit` then `$HOME/.nps-kit`.
@@ -151,7 +151,7 @@ Aligned with NOP TaskFrame (NPS-5 §3.1). Kit-specific additions flagged.
         "input_from": [],
         "input_mapping": {},
         "scope": ["src/auth/**", "docs/auth.md"],
-        "budget_npt": 8000,
+        "budget_cgn": 8000,
         "timeout_ms": 600000,
         "retry_policy": { "max_retries": 1, "backoff_ms": 5000 },
         "condition": null,
@@ -167,7 +167,7 @@ Aligned with NOP TaskFrame (NPS-5 §3.1). Kit-specific additions flagged.
         "input_from": ["node-1"],
         "input_mapping": { "research_doc": "node-1.files_touched[0]" },
         "scope": ["src/auth/login.ts", "src/auth/__tests__/**"],
-        "budget_npt": 15000,
+        "budget_cgn": 15000,
         "timeout_ms": 1200000,
         "retry_policy": { "max_retries": 1, "backoff_ms": 5000 },
         "condition": null,
@@ -197,7 +197,7 @@ Aligned with NOP TaskFrame (NPS-5 §3.1). Kit-specific additions flagged.
 | `dag.nodes[].retry_policy` | `dag.nodes[].retry_policy` | Direct |
 | `dag.nodes[].condition` | `dag.nodes[].condition` | Kit uses subset of CEL syntax or null |
 | `dag.nodes[].scope` | (via DelegateFrame.delegated_scope) | Kit promotes to task-node level for filesystem dispatch |
-| `dag.nodes[].budget_npt` | (via `TaskFrame.context.estimated_npt`) | Kit promotes to node-level for per-task budget |
+| `dag.nodes[].budget_cgn` | (via `TaskFrame.context.cgn_est`) | Kit promotes to node-level for per-task budget |
 | `dag.nodes[].success_criteria` | **Kit extension** | Machine-checkable DoD; not in NOP spec |
 
 **Scope semantics:** `dag.nodes[].scope` is literal. A worker may edit only the
@@ -462,7 +462,7 @@ The kit is a reference implementation of NPS, not a full conformant node.
 
 - **NPS-3 NIP:** NIDs on all identities (`urn:nps:agent:{domain}:{id}`), scope carving at worker boundary, enforced narrowing (never expansion).
 - **NPS-1 NCP:** `_ncp: 1` envelope versioning, type-tagged messages (`intent`, `result`, `task_list`).
-- **NPS-0 NPT:** per-family token rates in `config.json::npt_exchange_rates`, `detect_family()` for runtime inference.
+- **Cognon Budget Specification v0.3:** per-family token rates in `config.json::cgn_exchange_rates`, `detect_family()` for runtime inference.
 - **NPS-5 NOP:** DAG shape (TaskFrame-aligned), scope-carving (DelegateFrame-aligned), filesystem mailbox transport for local single-host dispatch. DAG validation per NPS-5 §3.1.1 enforced at `cmd_decompose`: max 32 nodes, acyclic. Violations emit `NOP-TASK-DAG-TOO-LARGE` / `NOP-TASK-DAG-CYCLE`. Delegation-chain depth not enforced (kit has no sub-worker delegation path; every worker is one hop from Dispatcher).
 
 ### 7.2 What the kit defers
@@ -507,7 +507,7 @@ Layer replacement (e.g., changing the Dispatcher from one-shot to long-running d
 ## 9. Relationship to other docs
 
 - [`implementation-spec.md`](implementation-spec.md) — wire-format runbook (message shapes, state transitions, hook system)
-- [`NPT.md`](NPT.md) — NPT token accounting details
+- [`Cognon.md`](Cognon.md) — Cognon (CGN) token accounting details
 - [NPS-Release/spec/](https://github.com/labacacia/NPS-Release/tree/main/spec) — canonical NPS spec
 
 ---
