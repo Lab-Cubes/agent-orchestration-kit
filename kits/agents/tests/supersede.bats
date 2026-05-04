@@ -284,7 +284,7 @@ _assert_event() {
     local rp="$KIT_AGENTS/coder-01/done/${TID}.result.json"
     cat > "$rp" <<EOF
 {"_ncp":1,"type":"result","value":"pushback","probability":0.5,"alternatives":[],
- "payload":{"_nop":1,"id":"${TID}","status":"blocked","pushback_reason":"scope_insufficient",
+ "payload":{"_nop":1,"schema_version":1,"id":"${TID}","status":"blocked","pushback_reason":"scope_insufficient",
   "from":"urn:nps:agent:example.com:coder-01",
   "picked_up_at":"2026-01-01T00:00:00Z","completed_at":"2026-01-01T00:01:00Z"}}
 EOF

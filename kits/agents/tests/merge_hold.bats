@@ -69,7 +69,7 @@ _write_result() {
     [[ -n "$plan_id" ]] && plan_field='"plan_id":"'"$plan_id"'",'
     cat > "$KIT_AGENTS/coder-01/done/${TASK_ID}.result.json" <<EOF
 {"_ncp":1,"type":"result","value":"done","probability":1.0,"alternatives":[],
- "payload":{${plan_field}"_nop":1,"id":"${TASK_ID}","status":"completed",
+ "payload":{${plan_field}"_nop":1,"schema_version":1,"id":"${TASK_ID}","status":"completed",
   "from":"urn:nps:agent:example.com:coder-01",
   "picked_up_at":"2026-01-01T00:00:00Z","completed_at":"2026-01-01T00:01:00Z"}}
 EOF
